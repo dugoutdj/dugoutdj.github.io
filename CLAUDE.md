@@ -20,6 +20,48 @@ npm run preview
 
 # Run ESLint
 npm run lint
+
+# Deploy to GitHub Pages (main branch)
+./deploy.sh
+```
+
+## Git Workflow
+
+This project uses a **two-branch strategy**:
+
+- **`source` branch**: Contains all source code (src/, package.json, etc.)
+- **`main` branch**: Contains only built files (dist/ contents) for GitHub Pages
+
+### Making Changes
+
+1. Work on the `source` branch (default)
+2. Make your code changes in src/
+3. Test locally with `npm run dev`
+4. Commit changes to `source` branch:
+   ```bash
+   git add .
+   git commit -m "Your commit message"
+   git push origin source
+   ```
+5. Deploy to production:
+   ```bash
+   ./deploy.sh
+   ```
+
+The deploy script automatically:
+- Builds the project (`npm run build`)
+- Clones the `main` branch to a temp directory
+- Replaces files with new build (preserves CNAME for custom domain)
+- Commits and pushes to `main`
+- Cleans up temp files
+
+### Initial Setup
+
+If setting up on a new machine:
+```bash
+git clone -b source https://github.com/dugoutdj/dugoutdj.github.io.git
+cd dugoutdj.github.io
+npm install
 ```
 
 ## Architecture
