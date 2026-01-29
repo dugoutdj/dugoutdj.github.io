@@ -19,7 +19,8 @@ cd "$TEMP_DIR"
 find . -maxdepth 1 ! -name '.git' ! -name 'CNAME' ! -name '.' -exec rm -rf {} + 2>/dev/null || true
 
 # Copy built files
-cp -r "$(git rev-parse --show-toplevel)/dist/"* .
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+cp -r "$SOURCE_DIR/dist/"* .
 
 # Check if there are changes
 if [ -n "$(git status --porcelain)" ]; then
