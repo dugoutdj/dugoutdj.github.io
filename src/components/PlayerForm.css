@@ -1,0 +1,76 @@
+.player-form-container {
+  background: var(--bg-primary);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-lg);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.player-form h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.song-input-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.song-input-group .input {
+  flex: 1;
+}
+
+.video-preview {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-tertiary);
+  border-radius: 0.25rem;
+}
+
+.video-preview small {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.youtube-premium-tip {
+  background: rgb(37 99 235 / 0.1);
+  border-left: 3px solid var(--primary-color);
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.youtube-premium-tip strong {
+  color: var(--primary-color);
+}
+
+.youtube-premium-tip a {
+  color: var(--primary-color);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.youtube-premium-tip a:hover {
+  opacity: 0.8;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .player-form-container {
+    padding: 1rem;
+  }
+
+  .song-input-group {
+    flex-direction: column;
+  }
+}

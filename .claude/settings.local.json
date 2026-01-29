@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof:*)",
+      "Bash(npm --version)",
+      "Bash(node --version)",
+      "Bash(test:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
