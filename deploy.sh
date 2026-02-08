@@ -11,7 +11,8 @@ npm run build
 echo "📦 Deploying to main branch..."
 
 # Clone main branch to temp directory
-TEMP_DIR="/tmp/dugoutdj-deploy-$(date +%s)"
+# Use Windows TEMP directory for compatibility
+TEMP_DIR="${TEMP:-/tmp}/dugoutdj-deploy-$(date +%s)"
 git clone -b main https://github.com/dugoutdj/dugoutdj.github.io.git "$TEMP_DIR"
 
 # Clear everything except .git and CNAME
