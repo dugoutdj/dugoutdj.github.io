@@ -19,6 +19,7 @@ export const useLocalStorage = () => {
       teams: [...prev.teams, newTeam],
       currentTeamId: prev.currentTeamId || newTeam.id
     }));
+    return newTeam.id; // Return the ID so players can be added!
   };
 
   const updateTeam = (teamId, updates) => {

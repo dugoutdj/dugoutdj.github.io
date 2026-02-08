@@ -1,0 +1,213 @@
+.gc-import-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.gc-import-dialog {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.gc-import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.gc-import-header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.gc-import-header .close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.gc-import-header .close-btn:hover {
+  background: var(--hover-color);
+  color: var(--text-primary);
+}
+
+.gc-import-content {
+  padding: 1.5rem;
+}
+
+.gc-step h3 {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
+}
+
+.gc-step p {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.instruction-steps {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.instruction-steps ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.instruction-steps li {
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.instruction-steps li:last-child {
+  margin-bottom: 0;
+}
+
+.instruction-steps ul {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.instruction-steps ul li {
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.instruction-steps code {
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  color: var(--primary-color);
+}
+
+.instruction-steps small {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.copy-bookmarklet-btn {
+  margin: 1rem 0;
+  width: 100%;
+  max-width: 300px;
+}
+
+.open-gc-btn {
+  margin: 0.5rem 0;
+  display: block;
+}
+
+.bookmarklet-code {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.bookmarklet-code textarea {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.75rem;
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+  margin: 0.5rem 0;
+}
+
+.bookmarklet-code small {
+  display: block;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+}
+
+.gc-import-tip {
+  background: var(--primary-color-10);
+  border-left: 4px solid var(--primary-color);
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.gc-import-tip strong {
+  color: var(--primary-color);
+}
+
+.gc-step-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.gc-step-actions .btn {
+  min-width: 100px;
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .gc-import-dialog {
+    margin: 0;
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  .gc-import-header {
+    padding: 1rem;
+  }
+
+  .gc-import-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .gc-import-content {
+    padding: 1rem;
+  }
+
+  .instruction-steps {
+    padding: 1rem;
+  }
+
+  .gc-step-actions {
+    flex-direction: column-reverse;
+  }
+
+  .gc-step-actions .btn {
+    width: 100%;
+  }
+}

@@ -7,6 +7,8 @@ import PlayerForm from './components/PlayerForm';
 import PlaybackControls from './components/PlaybackControls';
 import YouTubePlayer from './components/YouTubePlayer';
 import ShareDialog from './components/ShareDialog';
+import GameChangerImport from './components/GameChangerImport';
+import { importFromGameChanger } from './utils/gamechanger';
 import './App.css';
 
 function App() {
@@ -16,6 +18,8 @@ function App() {
   const [showPlayerForm, setShowPlayerForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showGCImport, setShowGCImport] = useState(false);
+  const [gcImportLoading, setGcImportLoading] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Start collapsed
   const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
@@ -32,6 +36,25 @@ function App() {
       storage.addTeam('My Team');
     } else if (!storage.currentTeam && storage.teams.length > 0) {
       storage.setCurrentTeam(storage.teams[0].id);
+    }
+  }, []);
+
+  // Check for GameChanger import redirect on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const gcData = urlParams.get('gc_data');
+
+    if (gcData) {
+      // Remove params from URL
+      window.history.replaceState({}, '', window.location.pathname);
+
+      try {
+        const data = JSON.parse(decodeURIComponent(gcData));
+        handleGameChangerDataImport(data);
+      } catch (error) {
+        console.error('Failed to parse GameChanger data:', error);
+        alert('Failed to import: Invalid data format');
+      }
     }
   }, []);
 
@@ -171,6 +194,93 @@ function App() {
     player.stopSong();
   };
 
+  const handleGameChangerDataImport = (data) => {
+    setGcImportLoading(true);
+
+    try {
+      console.log('Import data received:', data);
+      const { team, players } = data;
+      const teamName = team.name || 'Imported Team';
+      console.log('Team name:', teamName);
+      console.log('Players count:', players?.length);
+
+      // Add the imported team
+      const newTeamId = storage.addTeam(teamName);
+      console.log('Created team ID:', newTeamId);
+
+      // Transform and add players
+      if (players && players.length > 0) {
+        console.log('Adding players...');
+        players.forEach((player, index) => {
+          console.log(`Player ${index}:`, player);
+          const playerData = {
+            name: `${player.first_name || ''} ${player.last_name || ''}`.trim() ||
+                  `${player.firstName || ''} ${player.lastName || ''}`.trim() ||
+                  'Unknown Player',
+            number: String(player.number || player.jersey_number || ''),
+            songUrl: '',
+            songVideoId: '',
+            songTitle: '',
+            songThumbnail: '',
+            startTime: 0,
+            duration: 20,
+            order: index
+          };
+          console.log(`Adding player: ${playerData.name}`);
+          storage.addPlayer(newTeamId, playerData);
+        });
+      } else {
+        console.warn('No players to add!');
+      }
+
+      // Switch to the new team
+      storage.setCurrentTeam(newTeamId);
+
+      // Reset playback
+      setCurrentPlayerIndex(null);
+      player.stopSong();
+
+      alert(`Successfully imported ${teamName} with ${players?.length || 0} players!`);
+    } catch (error) {
+      console.error('GameChanger import failed:', error);
+      alert(`Import failed: ${error.message}\n\nPlease try again or contact support.`);
+    } finally {
+      setGcImportLoading(false);
+      setShowGCImport(false);
+    }
+  };
+
+  const handleGameChangerImport = async (teamId, token) => {
+    setGcImportLoading(true);
+
+    try {
+      const importedTeam = await importFromGameChanger(teamId, token);
+
+      // Add the imported team
+      const newTeamId = storage.addTeam(importedTeam.name);
+
+      // Add all players to the team
+      importedTeam.players.forEach(playerData => {
+        storage.addPlayer(newTeamId, playerData);
+      });
+
+      // Switch to the new team
+      storage.setCurrentTeam(newTeamId);
+
+      // Reset playback
+      setCurrentPlayerIndex(null);
+      player.stopSong();
+
+      alert(`Successfully imported ${importedTeam.name} with ${importedTeam.players.length} players!`);
+    } catch (error) {
+      console.error('GameChanger import failed:', error);
+      alert(`Import failed: ${error.message}\n\nPlease try again or contact support.`);
+    } finally {
+      setGcImportLoading(false);
+      setShowGCImport(false);
+    }
+  };
+
   const handleDismissPremiumBanner = () => {
     localStorage.setItem('premiumBannerDismissed', 'true');
     setPremiumBannerDismissed(true);
@@ -276,12 +386,21 @@ function App() {
                     {players.length} {players.length === 1 ? 'player' : 'players'}
                   </p>
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleAddPlayer}
-                >
-                  + Add Player
-                </button>
+                <div className="team-header-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowGCImport(true)}
+                    title="Import roster from GameChanger"
+                  >
+                    📥 Import
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleAddPlayer}
+                  >
+                    + Add Player
+                  </button>
+                </div>
               </div>
 
               {showPlayerForm && (
@@ -322,6 +441,22 @@ function App() {
           onImport={handleImport}
           onClose={() => setShowShareDialog(false)}
         />
+      )}
+
+      {showGCImport && (
+        <GameChangerImport
+          onImport={handleGameChangerImport}
+          onCancel={() => setShowGCImport(false)}
+        />
+      )}
+
+      {gcImportLoading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner">
+            <div className="spinner"></div>
+            <p>Importing from GameChanger...</p>
+          </div>
+        </div>
       )}
 
       <footer className="app-footer">
