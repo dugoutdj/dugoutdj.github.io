@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { extractVideoId, formatTime, fetchVideoInfo } from '../utils/youtube';
 import SongSearch from './SongSearch';
+import { SUGGESTED_SONGS } from '../constants/suggestedSongs';
 import './PlayerForm.css';
 
 export default function PlayerForm({ player, onSave, onCancel }) {
@@ -15,6 +16,7 @@ export default function PlayerForm({ player, onSave, onCancel }) {
     duration: 30
   });
   const [showSearch, setShowSearch] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState('');
   const [startTimeInput, setStartTimeInput] = useState('0:00');
   const [durationInput, setDurationInput] = useState('30');
   const [isFetchingTitle, setIsFetchingTitle] = useState(false);
@@ -87,6 +89,32 @@ export default function PlayerForm({ player, onSave, onCancel }) {
     setShowSearch(false);
   };
 
+  const handleSuggestionSelect = (e) => {
+    const videoId = e.target.value;
+    if (!videoId) return;
+
+    const song = SUGGESTED_SONGS.find(s => s.videoId === videoId);
+    if (song) {
+      // Reuse existing handleSongSelect pattern
+      handleSongSelect(song.videoId, song.title, song.thumbnail);
+
+      // Also populate default start/duration if not editing existing player
+      if (!player) {
+        setFormData(prev => ({
+          ...prev,
+          songUrl: `https://www.youtube.com/watch?v=${song.videoId}`,
+          songVideoId: song.videoId,
+          songTitle: song.title,
+          songThumbnail: song.thumbnail
+        }));
+        setStartTimeInput(formatTime(song.defaultStartTime));
+        setDurationInput(String(song.defaultDuration));
+      }
+
+      setSelectedSuggestion('');
+    }
+  };
+
   return (
     <div className="player-form-container">
       <form onSubmit={handleSubmit} className="player-form">
@@ -118,6 +146,26 @@ export default function PlayerForm({ player, onSave, onCancel }) {
         <div className="youtube-premium-tip">
           <strong>💡 Tip:</strong> YouTube videos may show ads before playing.
           Consider <a href="https://www.youtube.com/premium" target="_blank" rel="noopener noreferrer">YouTube Premium</a> for ad-free playback during games.
+        </div>
+
+        <div className="form-group">
+          <label>Suggested Songs</label>
+          <select
+            id="suggested-songs"
+            value={selectedSuggestion}
+            onChange={handleSuggestionSelect}
+            className="input"
+          >
+            <option value="">-- Choose a suggested song --</option>
+            {SUGGESTED_SONGS.map(song => (
+              <option key={song.videoId} value={song.videoId}>
+                {song.title}
+              </option>
+            ))}
+          </select>
+          <small className="form-hint">
+            Quick access to popular walk-up songs
+          </small>
         </div>
 
         <div className="form-group">
