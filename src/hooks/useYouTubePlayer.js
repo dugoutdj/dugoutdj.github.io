@@ -139,7 +139,10 @@ export const useYouTubePlayer = () => {
   }, [player, isReady]);
 
   const playSong = useCallback((videoId, startTime = 0, duration = 30, onEnd) => {
-    if (!player || !isReady) return;
+    if (!player || !isReady) {
+      console.warn('Player not ready yet');
+      return;
+    }
 
     onSongEndRef.current = onEnd;
     playbackEndTimeRef.current = startTime + duration;
@@ -150,19 +153,32 @@ export const useYouTubePlayer = () => {
     // Set volume to full immediately
     player.setVolume(100);
 
-    // Use cueVideoById (loads but doesn't auto-play) instead of loadVideoById
-    // This gives us full control over when playback starts
-    player.cueVideoById({
-      videoId,
-      startSeconds: startTime
-    });
+    try {
+      // Use loadVideoById for immediate loading and playback
+      // This is more reliable than cueVideoById + setTimeout
+      player.loadVideoById({
+        videoId,
+        startSeconds: startTime
+      });
 
-    // Explicitly play after video is cued - works like mini player
-    setTimeout(() => {
-      if (player && player.playVideo) {
-        player.playVideo();
-      }
-    }, 200);
+      // Backup: ensure playback starts after a short delay
+      setTimeout(() => {
+        if (player && player.getPlayerState && player.getPlayerState() !== 1) {
+          // State 1 = playing, if not playing, force it
+          player.playVideo();
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Failed to load video:', error);
+      // Retry once with playVideo
+      setTimeout(() => {
+        try {
+          player.playVideo();
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+        }
+      }, 1000);
+    }
   }, [player, isReady]);
 
   const pauseSong = useCallback(() => {
