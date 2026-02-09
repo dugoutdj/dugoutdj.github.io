@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { saveData, loadData } from '../utils/storage';
 
+// Counter to ensure unique IDs even in rapid succession
+let idCounter = 0;
+
 export const useLocalStorage = () => {
   const [data, setData] = useState(loadData());
 
@@ -9,8 +12,8 @@ export const useLocalStorage = () => {
   }, [data]);
 
   const addTeam = (name) => {
-    // Generate unique ID using timestamp + random number to avoid collisions
-    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+    // Generate unique ID using timestamp + counter to guarantee uniqueness
+    const uniqueId = Date.now() * 1000 + (idCounter++);
 
     const newTeam = {
       id: uniqueId,
@@ -51,8 +54,8 @@ export const useLocalStorage = () => {
   };
 
   const addPlayer = (teamId, player) => {
-    // Generate unique ID using timestamp + random number to avoid collisions during bulk imports
-    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+    // Generate unique ID using timestamp + counter to guarantee uniqueness
+    const uniqueId = Date.now() * 1000 + (idCounter++);
 
     const newPlayer = {
       id: uniqueId,
