@@ -147,7 +147,14 @@ function App() {
       // Start from first player
       handlePlayPlayer(0);
     } else {
-      player.resumeSong();
+      // If player is already playing, just resume
+      // If not playing (e.g., loading or failed on mobile), replay the current song
+      if (player.isPlaying) {
+        player.resumeSong();
+      } else {
+        // Replay current player (handles mobile autoplay issues and loading delays)
+        handlePlayPlayer(currentPlayerIndex);
+      }
     }
   };
 
