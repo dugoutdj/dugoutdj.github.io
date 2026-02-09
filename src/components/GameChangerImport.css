@@ -56,8 +56,48 @@
   color: var(--text-primary);
 }
 
+.gc-import-methods {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.method-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.method-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.method-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
 .gc-import-content {
   padding: 1.5rem;
+}
+
+.method-description {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background: var(--primary-color-10);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary-color);
 }
 
 .gc-step h3 {
@@ -209,5 +249,72 @@
 
   .gc-step-actions .btn {
     width: 100%;
+  }
+}
+
+/* Paste roster textarea */
+.roster-textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 0.75rem;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s ease;
+}
+
+.roster-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.roster-textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+/* Player preview */
+.player-preview {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 1.5rem;
+}
+
+.preview-player {
+  padding: 0.5rem 0.75rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.preview-player:last-child {
+  border-bottom: none;
+}
+
+.preview-player:nth-child(even) {
+  background: var(--bg-secondary);
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 600px) {
+  .gc-import-methods {
+    padding: 0.75rem 1rem 0;
+  }
+
+  .method-btn {
+    font-size: 0.85rem;
+    padding: 0.6rem 0.5rem;
+  }
+
+  .roster-textarea {
+    min-height: 150px;
+    font-size: 0.9rem;
   }
 }

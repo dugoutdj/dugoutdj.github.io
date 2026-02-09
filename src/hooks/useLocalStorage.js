@@ -9,8 +9,11 @@ export const useLocalStorage = () => {
   }, [data]);
 
   const addTeam = (name) => {
+    // Generate unique ID using timestamp + random number to avoid collisions
+    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+
     const newTeam = {
-      id: Date.now(),
+      id: uniqueId,
       name,
       players: []
     };
@@ -48,8 +51,11 @@ export const useLocalStorage = () => {
   };
 
   const addPlayer = (teamId, player) => {
+    // Generate unique ID using timestamp + random number to avoid collisions during bulk imports
+    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+
     const newPlayer = {
-      id: Date.now(),
+      id: uniqueId,
       name: player.name,
       number: player.number || '',
       songUrl: player.songUrl || '',

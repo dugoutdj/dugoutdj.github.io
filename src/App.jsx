@@ -204,9 +204,21 @@ function App() {
       console.log('Team name:', teamName);
       console.log('Players count:', players?.length);
 
-      // Add the imported team
-      const newTeamId = storage.addTeam(teamName);
-      console.log('Created team ID:', newTeamId);
+      let targetTeamId;
+
+      // If current team exists and has 0 players, populate it instead of creating new team
+      if (currentTeam && currentTeam.players.length === 0) {
+        targetTeamId = currentTeam.id;
+        // Update the team name
+        storage.updateTeam(targetTeamId, { name: teamName });
+        console.log('Using existing empty team ID:', targetTeamId);
+      } else {
+        // Create new team if no team or existing team has players
+        targetTeamId = storage.addTeam(teamName);
+        console.log('Created new team ID:', targetTeamId);
+        // Switch to the new team
+        storage.setCurrentTeam(targetTeamId);
+      }
 
       // Transform and add players
       if (players && players.length > 0) {
@@ -227,14 +239,11 @@ function App() {
             order: index
           };
           console.log(`Adding player: ${playerData.name}`);
-          storage.addPlayer(newTeamId, playerData);
+          storage.addPlayer(targetTeamId, playerData);
         });
       } else {
         console.warn('No players to add!');
       }
-
-      // Switch to the new team
-      storage.setCurrentTeam(newTeamId);
 
       // Reset playback
       setCurrentPlayerIndex(null);
@@ -445,7 +454,7 @@ function App() {
 
       {showGCImport && (
         <GameChangerImport
-          onImport={handleGameChangerImport}
+          onImport={handleGameChangerDataImport}
           onCancel={() => setShowGCImport(false)}
         />
       )}
