@@ -177,7 +177,6 @@ export const useYouTubePlayer = () => {
 
     onSongEndRef.current = onEnd;
     playbackEndTimeRef.current = startTime + duration;
-    preloadedVideoIdRef.current = null;
 
     // Set loading state
     setIsLoading(true);
@@ -186,11 +185,25 @@ export const useYouTubePlayer = () => {
     player.setVolume(100);
 
     try {
-      // Use loadVideoById for immediate loading and playback
-      player.loadVideoById({
-        videoId,
-        startSeconds: startTime
-      });
+      // Check if this video is already preloaded/cued
+      const isPreloaded = preloadedVideoIdRef.current === videoId;
+
+      if (isPreloaded) {
+        // Video is already buffered, just seek and play
+        console.log('Using preloaded video');
+        player.seekTo(startTime, true);
+        player.playVideo();
+        // Clear the preloaded reference
+        preloadedVideoIdRef.current = null;
+      } else {
+        // Video not preloaded, load it fresh
+        console.log('Loading video fresh');
+        preloadedVideoIdRef.current = null;
+        player.loadVideoById({
+          videoId,
+          startSeconds: startTime
+        });
+      }
 
       // Keep trying to play until it works or timeout (15 seconds for slow connections)
       let attempts = 0;
