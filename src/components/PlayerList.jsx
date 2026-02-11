@@ -5,6 +5,7 @@ import './PlayerList.css';
 export default function PlayerList({
   players,
   currentPlayerIndex,
+  bufferStatus,
   onEdit,
   onDelete,
   onReorder,
@@ -75,6 +76,13 @@ export default function PlayerList({
         >
           <div className="col-order">
             <span className="order-number">{index + 1}</span>
+            {bufferStatus && bufferStatus[player.id] && (
+              <span className={`buffer-status buffer-status-${bufferStatus[player.id]}`}>
+                {bufferStatus[player.id] === 'ready' && '✓'}
+                {bufferStatus[player.id] === 'buffering' && '⏳'}
+                {bufferStatus[player.id] === 'error' && '✗'}
+              </span>
+            )}
           </div>
 
           <div className="col-player">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import TeamSelector from './components/TeamSelector';
@@ -26,6 +26,10 @@ function App() {
   const [premiumBannerDismissed, setPremiumBannerDismissed] = useState(
     localStorage.getItem('premiumBannerDismissed') === 'true'
   );
+  const [bufferStatus, setBufferStatus] = useState({}); // { playerId: 'ready' | 'buffering' | 'error' | 'not-loaded' }
+
+  const preloadQueueRef = useRef([]);
+  const isPreloadingRef = useRef(false);
 
   const currentTeam = storage.currentTeam;
   const players = currentTeam?.players || [];
@@ -190,6 +194,66 @@ function App() {
       handlePlayPlayer(currentPlayerIndex);
     }
   };
+
+  // Preload songs sequentially to show buffer status
+  const preloadNextSong = () => {
+    if (isPreloadingRef.current || preloadQueueRef.current.length === 0 || !player.isReady) {
+      return;
+    }
+
+    isPreloadingRef.current = true;
+    const nextPlayer = preloadQueueRef.current.shift();
+
+    if (!nextPlayer || !nextPlayer.songVideoId) {
+      isPreloadingRef.current = false;
+      // Continue with next in queue
+      if (preloadQueueRef.current.length > 0) {
+        setTimeout(preloadNextSong, 100);
+      }
+      return;
+    }
+
+    // Set buffering status
+    setBufferStatus(prev => ({ ...prev, [nextPlayer.id]: 'buffering' }));
+
+    // Preload the song
+    player.preloadSong(nextPlayer.songVideoId, nextPlayer.startTime, (success) => {
+      setBufferStatus(prev => ({
+        ...prev,
+        [nextPlayer.id]: success ? 'ready' : 'error'
+      }));
+
+      isPreloadingRef.current = false;
+
+      // Continue with next song after a short delay
+      if (preloadQueueRef.current.length > 0) {
+        setTimeout(preloadNextSong, 500); // 500ms delay between preloads
+      }
+    });
+  };
+
+  // Start preloading all songs when roster changes
+  useEffect(() => {
+    if (!currentTeam || !players || players.length === 0 || !player.isReady) {
+      return;
+    }
+
+    // Reset buffer status for new roster
+    const newBufferStatus = {};
+    players.forEach(p => {
+      if (p.songVideoId) {
+        newBufferStatus[p.id] = 'not-loaded';
+      }
+    });
+    setBufferStatus(newBufferStatus);
+
+    // Queue all players for preloading
+    preloadQueueRef.current = players.filter(p => p.songVideoId);
+    isPreloadingRef.current = false;
+
+    // Start preloading after a short delay
+    setTimeout(preloadNextSong, 1000);
+  }, [currentTeam?.id, players, player.isReady]);
 
   const handleRenameTeam = (teamId, newName) => {
     storage.updateTeam(teamId, { name: newName });
@@ -434,6 +498,7 @@ function App() {
               <PlayerList
                 players={players}
                 currentPlayerIndex={currentPlayerIndex}
+                bufferStatus={bufferStatus}
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
                 onReorder={handleReorderPlayers}

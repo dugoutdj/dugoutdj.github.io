@@ -126,11 +126,17 @@ export const useYouTubePlayer = () => {
     }, 50);
   }, [player]);
 
-  const preloadSong = useCallback((videoId, startTime = 0) => {
-    if (!player || !isReady || !videoId) return;
+  const preloadSong = useCallback((videoId, startTime = 0, callback) => {
+    if (!player || !isReady || !videoId) {
+      if (callback) callback(false);
+      return;
+    }
 
     // Only preload if it's a different video than what's already preloaded
-    if (preloadedVideoIdRef.current === videoId) return;
+    if (preloadedVideoIdRef.current === videoId) {
+      if (callback) callback(true);
+      return;
+    }
 
     try {
       // Use cueVideoById to buffer the video without playing
@@ -139,8 +145,21 @@ export const useYouTubePlayer = () => {
         startSeconds: startTime
       });
       preloadedVideoIdRef.current = videoId;
+
+      // Wait a bit for the video to load, then check if it's ready
+      setTimeout(() => {
+        try {
+          const state = player.getPlayerState ? player.getPlayerState() : -1;
+          // State 5 = video cued (ready), state -1 = unstarted but loaded
+          const success = state === 5 || state === -1 || state === 2;
+          if (callback) callback(success);
+        } catch (e) {
+          if (callback) callback(false);
+        }
+      }, 2000); // Give 2 seconds for buffering
     } catch (error) {
       console.warn('Failed to preload video:', error);
+      if (callback) callback(false);
     }
   }, [player, isReady]);
 

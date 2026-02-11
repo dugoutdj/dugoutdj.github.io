@@ -53,14 +53,44 @@
 
 .col-order {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .order-number {
   font-weight: 600;
   font-size: 1.125rem;
   color: var(--text-primary);
+}
+
+.buffer-status {
+  display: block;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  text-align: center;
+}
+
+.buffer-status-ready {
+  color: #10b981; /* Green */
+}
+
+.buffer-status-buffering {
+  color: #f59e0b; /* Orange */
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.buffer-status-error {
+  color: #ef4444; /* Red */
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .player-info {
