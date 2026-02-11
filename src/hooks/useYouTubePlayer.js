@@ -12,7 +12,7 @@ export const useYouTubePlayer = () => {
   const fadeIntervalRef = useRef(null);
   const playbackEndTimeRef = useRef(null);
   const onSongEndRef = useRef(null);
-  const preloadedVideoIdsRef = useRef(new Set()); // Track ALL preloaded videos, not just one
+  const currentlyCuedVideoRef = useRef(null); // Track which video is CURRENTLY cued (only one at a time)
   const playRetryIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -132,8 +132,8 @@ export const useYouTubePlayer = () => {
       return;
     }
 
-    // Only preload if not already preloaded
-    if (preloadedVideoIdsRef.current.has(videoId)) {
+    // Check if this video is already the currently cued one
+    if (currentlyCuedVideoRef.current === videoId) {
       if (callback) callback(true);
       return;
     }
@@ -152,8 +152,9 @@ export const useYouTubePlayer = () => {
           // State 5 = video cued (ready), state -1 = unstarted but loaded
           const success = state === 5 || state === -1 || state === 2;
           if (success) {
-            preloadedVideoIdsRef.current.add(videoId);
-            console.log(`Preloaded ${videoId}, total: ${preloadedVideoIdsRef.current.size}`);
+            // Mark this as the currently cued video (replaces any previous)
+            currentlyCuedVideoRef.current = videoId;
+            console.log(`Cued ${videoId}`);
           }
           if (callback) callback(success);
         } catch (e) {
@@ -184,26 +185,17 @@ export const useYouTubePlayer = () => {
     // Set volume to full immediately
     player.setVolume(100);
 
-    // Check if this video is already preloaded/cued
-    const isPreloaded = preloadedVideoIdsRef.current.has(videoId);
-
-    if (isPreloaded) {
-      // Video is already buffered, play immediately without loading indicator
-      console.log('Using preloaded video, playing immediately');
-      player.seekTo(startTime, true);
-      player.playVideo();
-      return; // Exit early, no loading state or retry needed
-    }
-
-    // Not preloaded - show loading indicator and load fresh
-    setIsLoading(true);
-
+    // Always use loadVideoById to ensure correct video plays
+    // Prior preloading may help with faster loading via YouTube's caching
     try {
-      console.log('Loading video fresh');
+      console.log('Loading video:', videoId);
       player.loadVideoById({
         videoId,
         startSeconds: startTime
       });
+
+      // Set loading state briefly
+      setIsLoading(true);
 
       // Keep trying to play until it works or timeout (15 seconds for slow connections)
       let attempts = 0;
