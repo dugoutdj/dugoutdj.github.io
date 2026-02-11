@@ -327,6 +327,7 @@ function App() {
               currentPlayerIndex={currentPlayerIndex}
               totalPlayers={players.length}
               isPlaying={player.isPlaying}
+              isLoading={player.isLoading}
               currentTime={player.currentTime}
               onPlay={handlePlay}
               onPause={handlePause}

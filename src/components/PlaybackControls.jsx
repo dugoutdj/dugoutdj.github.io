@@ -6,6 +6,7 @@ export default function PlaybackControls({
   currentPlayerIndex,
   totalPlayers,
   isPlaying,
+  isLoading,
   currentTime,
   onPlay,
   onPause,
@@ -83,7 +84,15 @@ export default function PlaybackControls({
           🔄
         </button>
 
-        {isPlaying ? (
+        {isLoading ? (
+          <button
+            className="btn btn-control btn-play"
+            disabled
+            title="Loading..."
+          >
+            ⏳
+          </button>
+        ) : isPlaying ? (
           <button
             className="btn btn-control btn-play"
             onClick={onPause}
@@ -120,6 +129,12 @@ export default function PlaybackControls({
           ⏭
         </button>
       </div>
+
+      {isLoading && (
+        <div className="playback-info">
+          ⏳ Buffering song... (this may take longer on cellular data)
+        </div>
+      )}
 
       {currentPlayer && !currentPlayer.songVideoId && (
         <div className="playback-warning">

@@ -5,6 +5,7 @@ export const useYouTubePlayer = () => {
   const [player, setPlayer] = useState(null);
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const playerRef = useRef(null);
   const intervalRef = useRef(null);
@@ -12,6 +13,7 @@ export const useYouTubePlayer = () => {
   const playbackEndTimeRef = useRef(null);
   const onSongEndRef = useRef(null);
   const preloadedVideoIdRef = useRef(null);
+  const playRetryIntervalRef = useRef(null);
 
   useEffect(() => {
     loadYouTubeAPI().then((YT) => {
@@ -33,9 +35,12 @@ export const useYouTubePlayer = () => {
           onStateChange: (event) => {
             if (event.data === YT.PlayerState.PLAYING) {
               setIsPlaying(true);
+              setIsLoading(false);
             } else if (event.data === YT.PlayerState.PAUSED ||
                        event.data === YT.PlayerState.ENDED) {
               setIsPlaying(false);
+            } else if (event.data === YT.PlayerState.BUFFERING) {
+              setIsLoading(true);
             }
           }
         }
@@ -45,6 +50,7 @@ export const useYouTubePlayer = () => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+      if (playRetryIntervalRef.current) clearInterval(playRetryIntervalRef.current);
     };
   }, []);
 
@@ -144,40 +150,77 @@ export const useYouTubePlayer = () => {
       return;
     }
 
+    // Clear any previous retry interval
+    if (playRetryIntervalRef.current) {
+      clearInterval(playRetryIntervalRef.current);
+      playRetryIntervalRef.current = null;
+    }
+
     onSongEndRef.current = onEnd;
     playbackEndTimeRef.current = startTime + duration;
-
-    // Clear any preloaded video first
     preloadedVideoIdRef.current = null;
+
+    // Set loading state
+    setIsLoading(true);
 
     // Set volume to full immediately
     player.setVolume(100);
 
     try {
       // Use loadVideoById for immediate loading and playback
-      // This is more reliable than cueVideoById + setTimeout
       player.loadVideoById({
         videoId,
         startSeconds: startTime
       });
 
-      // Backup: ensure playback starts after a short delay
-      setTimeout(() => {
-        if (player && player.getPlayerState && player.getPlayerState() !== 1) {
-          // State 1 = playing, if not playing, force it
-          player.playVideo();
+      // Keep trying to play until it works or timeout (15 seconds for slow connections)
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 500ms = 15 seconds
+
+      playRetryIntervalRef.current = setInterval(() => {
+        attempts++;
+
+        if (!player || !player.getPlayerState) {
+          if (attempts >= maxAttempts) {
+            clearInterval(playRetryIntervalRef.current);
+            playRetryIntervalRef.current = null;
+            setIsLoading(false);
+            console.error('Player not available after timeout');
+          }
+          return;
+        }
+
+        const state = player.getPlayerState();
+        // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+
+        if (state === 1) {
+          // Playing! Success
+          clearInterval(playRetryIntervalRef.current);
+          playRetryIntervalRef.current = null;
+          setIsLoading(false);
+        } else if (state === 3) {
+          // Buffering - keep waiting
+          console.log('Video buffering...');
+        } else if (state === 5 || state === 2 || state === -1) {
+          // Video is cued/paused/unstarted - try to play
+          try {
+            player.playVideo();
+          } catch (e) {
+            console.warn('Play attempt failed:', e);
+          }
+        }
+
+        // Timeout after max attempts
+        if (attempts >= maxAttempts) {
+          clearInterval(playRetryIntervalRef.current);
+          playRetryIntervalRef.current = null;
+          setIsLoading(false);
+          console.error('Failed to start playback after 15 seconds');
         }
       }, 500);
     } catch (error) {
       console.error('Failed to load video:', error);
-      // Retry once with playVideo
-      setTimeout(() => {
-        try {
-          player.playVideo();
-        } catch (retryError) {
-          console.error('Retry failed:', retryError);
-        }
-      }, 1000);
+      setIsLoading(false);
     }
   }, [player, isReady]);
 
@@ -211,6 +254,7 @@ export const useYouTubePlayer = () => {
   return {
     isReady,
     isPlaying,
+    isLoading,
     currentTime,
     playSong,
     preloadSong,
