@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import TeamSelector from './components/TeamSelector';
 import PlayerList from './components/PlayerList';
 import PlayerForm from './components/PlayerForm';
 import PlaybackControls from './components/PlaybackControls';
-import YouTubePlayer from './components/YouTubePlayer';
+import PlayerYouTubeEmbed from './components/PlayerYouTubeEmbed';
 import ShareDialog from './components/ShareDialog';
 import GameChangerImport from './components/GameChangerImport';
 import { importFromGameChanger } from './utils/gamechanger';
@@ -13,7 +12,6 @@ import './App.css';
 
 function App() {
   const storage = useLocalStorage();
-  const player = useYouTubePlayer();
 
   const [showPlayerForm, setShowPlayerForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
@@ -21,15 +19,14 @@ function App() {
   const [showGCImport, setShowGCImport] = useState(false);
   const [gcImportLoading, setGcImportLoading] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Start collapsed
-  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [premiumBannerDismissed, setPremiumBannerDismissed] = useState(
     localStorage.getItem('premiumBannerDismissed') === 'true'
   );
-  const [bufferStatus, setBufferStatus] = useState({}); // { playerId: 'ready' | 'buffering' | 'error' | 'not-loaded' }
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  const preloadQueueRef = useRef([]);
-  const isPreloadingRef = useRef(false);
+  // Track YouTube player instances - one per roster player
+  const playerInstancesRef = useRef({});
 
   const currentTeam = storage.currentTeam;
   const players = currentTeam?.players || [];
@@ -135,40 +132,50 @@ function App() {
     if (!players[index] || !players[index].songVideoId) return;
 
     const targetPlayer = players[index];
-    setCurrentPlayerIndex(index);
+    const ytPlayer = playerInstancesRef.current[targetPlayer.id];
 
-    // Play song without auto-advance callback
-    player.playSong(
-      targetPlayer.songVideoId,
-      targetPlayer.startTime,
-      targetPlayer.duration,
-      null // No auto-advance
-    );
+    if (!ytPlayer) {
+      console.warn('Player not ready yet');
+      return;
+    }
+
+    // Stop any currently playing player
+    Object.values(playerInstancesRef.current).forEach(p => {
+      if (p && p.pauseVideo) p.pauseVideo();
+    });
+
+    setCurrentPlayerIndex(index);
+    setIsPlaying(true);
+
+    // Play this player's song
+    ytPlayer.setVolume(100);
+    ytPlayer.playVideo();
   };
 
   const handlePlay = () => {
     if (currentPlayerIndex === null) {
-      // Start from first player
       handlePlayPlayer(0);
     } else {
-      // If player is already playing, just resume
-      // If not playing (e.g., loading or failed on mobile), replay the current song
-      if (player.isPlaying) {
-        player.resumeSong();
-      } else {
-        // Replay current player (handles mobile autoplay issues and loading delays)
-        handlePlayPlayer(currentPlayerIndex);
-      }
+      handlePlayPlayer(currentPlayerIndex);
     }
   };
 
   const handlePause = () => {
-    player.pauseSong();
+    if (currentPlayerIndex !== null && players[currentPlayerIndex]) {
+      const ytPlayer = playerInstancesRef.current[players[currentPlayerIndex].id];
+      if (ytPlayer && ytPlayer.pauseVideo) {
+        ytPlayer.pauseVideo();
+        setIsPlaying(false);
+      }
+    }
   };
 
   const handleStop = () => {
-    player.stopSong();
+    Object.values(playerInstancesRef.current).forEach(p => {
+      if (p && p.pauseVideo) p.pauseVideo();
+    });
     setCurrentPlayerIndex(null);
+    setIsPlaying(false);
   };
 
   const handleNext = () => {
@@ -195,65 +202,17 @@ function App() {
     }
   };
 
-  // Preload songs sequentially to show buffer status
-  const preloadNextSong = () => {
-    if (isPreloadingRef.current || preloadQueueRef.current.length === 0 || !player.isReady) {
-      return;
-    }
-
-    isPreloadingRef.current = true;
-    const nextPlayer = preloadQueueRef.current.shift();
-
-    if (!nextPlayer || !nextPlayer.songVideoId) {
-      isPreloadingRef.current = false;
-      // Continue with next in queue
-      if (preloadQueueRef.current.length > 0) {
-        setTimeout(preloadNextSong, 100);
-      }
-      return;
-    }
-
-    // Set buffering status
-    setBufferStatus(prev => ({ ...prev, [nextPlayer.id]: 'buffering' }));
-
-    // Preload the song
-    player.preloadSong(nextPlayer.songVideoId, nextPlayer.startTime, (success) => {
-      setBufferStatus(prev => ({
-        ...prev,
-        [nextPlayer.id]: success ? 'ready' : 'error'
-      }));
-
-      isPreloadingRef.current = false;
-
-      // Continue with next song after a short delay
-      if (preloadQueueRef.current.length > 0) {
-        setTimeout(preloadNextSong, 500); // 500ms delay between preloads
-      }
-    });
+  // Handle when a player instance is ready
+  const handlePlayerReady = (playerId, ytPlayer) => {
+    playerInstancesRef.current[playerId] = ytPlayer;
+    console.log(`Player ${playerId} ready`);
   };
 
-  // Preload all songs when roster changes
-  useEffect(() => {
-    if (!currentTeam || !players || players.length === 0 || !player.isReady) {
-      return;
-    }
-
-    // Reset buffer status for new roster
-    const newBufferStatus = {};
-    players.forEach(p => {
-      if (p.songVideoId) {
-        newBufferStatus[p.id] = 'not-loaded';
-      }
-    });
-    setBufferStatus(newBufferStatus);
-
-    // Queue all players with songs for preloading
-    preloadQueueRef.current = players.filter(p => p.songVideoId);
-    isPreloadingRef.current = false;
-
-    // Start preloading after a short delay
-    setTimeout(preloadNextSong, 1000);
-  }, [currentTeam?.id, players, player.isReady]);
+  // Handle when a song ends
+  const handleSongEnded = (playerId) => {
+    setIsPlaying(false);
+    setCurrentPlayerIndex(null);
+  };
 
   const handleRenameTeam = (teamId, newName) => {
     storage.updateTeam(teamId, { name: newName });
@@ -390,9 +349,7 @@ function App() {
               currentPlayer={currentPlayerIndex !== null ? players[currentPlayerIndex] : null}
               currentPlayerIndex={currentPlayerIndex}
               totalPlayers={players.length}
-              isPlaying={player.isPlaying}
-              isLoading={player.isLoading}
-              currentTime={player.currentTime}
+              isPlaying={isPlaying}
               onPlay={handlePlay}
               onPause={handlePause}
               onStop={handleStop}
@@ -498,7 +455,6 @@ function App() {
               <PlayerList
                 players={players}
                 currentPlayerIndex={currentPlayerIndex}
-                bufferStatus={bufferStatus}
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
                 onReorder={handleReorderPlayers}
@@ -515,7 +471,16 @@ function App() {
         </main>
       </div>
 
-      <YouTubePlayer />
+      {/* Render a YouTube player for each roster player */}
+      {players.map((rosterPlayer, index) => (
+        <PlayerYouTubeEmbed
+          key={rosterPlayer.id}
+          player={rosterPlayer}
+          isActive={currentPlayerIndex === index}
+          onReady={handlePlayerReady}
+          onEnded={handleSongEnded}
+        />
+      ))}
 
       {showShareDialog && (
         <ShareDialog

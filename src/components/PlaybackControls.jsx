@@ -6,8 +6,6 @@ export default function PlaybackControls({
   currentPlayerIndex,
   totalPlayers,
   isPlaying,
-  isLoading,
-  currentTime,
   onPlay,
   onPause,
   onStop,
@@ -15,49 +13,20 @@ export default function PlaybackControls({
   onPrevious,
   onReplay
 }) {
-  const progress = currentPlayer
-    ? ((currentTime - currentPlayer.startTime) / currentPlayer.duration) * 100
-    : 0;
-
   return (
     <div className="playback-controls">
       <div className="now-playing">
         {currentPlayer ? (
-          <>
-            <div className="now-playing-header">
-              {currentPlayer.songThumbnail && (
-                <img
-                  src={currentPlayer.songThumbnail}
-                  alt={currentPlayer.songTitle || currentPlayer.name}
-                  className="song-thumbnail-large"
-                />
-              )}
-              <div className="now-playing-info">
-                <span className="now-playing-label">Now Playing:</span>
-                <span className="now-playing-player">
-                  {currentPlayer.name}
-                  {currentPlayer.number && ` #${currentPlayer.number}`}
-                </span>
-                {currentPlayer.songTitle && (
-                  <span className="now-playing-song">{currentPlayer.songTitle}</span>
-                )}
-                <span className="now-playing-order">
-                  ({currentPlayerIndex + 1} of {totalPlayers})
-                </span>
-              </div>
-            </div>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-              />
-            </div>
-            <div className="time-info">
-              <span>{formatTime(Math.max(0, currentTime - currentPlayer.startTime))}</span>
-              <span>/</span>
-              <span>{formatTime(currentPlayer.duration)}</span>
-            </div>
-          </>
+          <div className="now-playing-info-simple">
+            <span className="now-playing-label">Now Playing:</span>
+            <span className="now-playing-player">
+              {currentPlayer.name}
+              {currentPlayer.number && ` #${currentPlayer.number}`}
+            </span>
+            <span className="now-playing-order">
+              ({currentPlayerIndex + 1} of {totalPlayers})
+            </span>
+          </div>
         ) : (
           <div className="now-playing-empty">
             <span>No song playing</span>
@@ -84,15 +53,7 @@ export default function PlaybackControls({
           🔄
         </button>
 
-        {isLoading ? (
-          <button
-            className="btn btn-control btn-play"
-            disabled
-            title="Loading..."
-          >
-            ⏳
-          </button>
-        ) : isPlaying ? (
+        {isPlaying ? (
           <button
             className="btn btn-control btn-play"
             onClick={onPause}
@@ -129,12 +90,6 @@ export default function PlaybackControls({
           ⏭
         </button>
       </div>
-
-      {isLoading && (
-        <div className="playback-info">
-          ⏳ Buffering song... (this may take longer on cellular data)
-        </div>
-      )}
 
       {currentPlayer && !currentPlayer.songVideoId && (
         <div className="playback-warning">

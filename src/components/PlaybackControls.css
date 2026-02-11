@@ -119,6 +119,13 @@
   flex: 1;
 }
 
+.now-playing-info-simple {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
 .now-playing-label {
   font-size: 0.8125rem;
   color: var(--text-secondary);
