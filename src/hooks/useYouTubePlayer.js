@@ -12,7 +12,7 @@ export const useYouTubePlayer = () => {
   const fadeIntervalRef = useRef(null);
   const playbackEndTimeRef = useRef(null);
   const onSongEndRef = useRef(null);
-  const preloadedVideoIdRef = useRef(null);
+  const preloadedVideoIdsRef = useRef(new Set()); // Track ALL preloaded videos, not just one
   const playRetryIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -132,8 +132,8 @@ export const useYouTubePlayer = () => {
       return;
     }
 
-    // Only preload if it's a different video than what's already preloaded
-    if (preloadedVideoIdRef.current === videoId) {
+    // Only preload if not already preloaded
+    if (preloadedVideoIdsRef.current.has(videoId)) {
       if (callback) callback(true);
       return;
     }
@@ -144,7 +144,6 @@ export const useYouTubePlayer = () => {
         videoId,
         startSeconds: startTime
       });
-      preloadedVideoIdRef.current = videoId;
 
       // Wait a bit for the video to load, then check if it's ready
       setTimeout(() => {
@@ -152,6 +151,10 @@ export const useYouTubePlayer = () => {
           const state = player.getPlayerState ? player.getPlayerState() : -1;
           // State 5 = video cued (ready), state -1 = unstarted but loaded
           const success = state === 5 || state === -1 || state === 2;
+          if (success) {
+            preloadedVideoIdsRef.current.add(videoId);
+            console.log(`Preloaded ${videoId}, total: ${preloadedVideoIdsRef.current.size}`);
+          }
           if (callback) callback(success);
         } catch (e) {
           if (callback) callback(false);
@@ -186,19 +189,18 @@ export const useYouTubePlayer = () => {
 
     try {
       // Check if this video is already preloaded/cued
-      const isPreloaded = preloadedVideoIdRef.current === videoId;
+      const isPreloaded = preloadedVideoIdsRef.current.has(videoId);
 
       if (isPreloaded) {
-        // Video is already buffered, just seek and play
-        console.log('Using preloaded video');
-        player.seekTo(startTime, true);
+        // Video is already buffered, just play it
+        // No need to seek since it was cued with the right startTime
+        console.log('Using preloaded video, playing immediately');
+        setIsLoading(false); // Clear loading immediately for preloaded videos
         player.playVideo();
-        // Clear the preloaded reference
-        preloadedVideoIdRef.current = null;
+        return; // Exit early, no retry needed for preloaded videos
       } else {
         // Video not preloaded, load it fresh
         console.log('Loading video fresh');
-        preloadedVideoIdRef.current = null;
         player.loadVideoById({
           videoId,
           startSeconds: startTime
