@@ -232,7 +232,7 @@ function App() {
     });
   };
 
-  // Preload first player when roster changes (YouTube can only buffer one video at a time)
+  // Preload all songs when roster changes
   useEffect(() => {
     if (!currentTeam || !players || players.length === 0 || !player.isReady) {
       return;
@@ -247,14 +247,12 @@ function App() {
     });
     setBufferStatus(newBufferStatus);
 
-    // Only preload the first player (YouTube can only cue one video at a time)
-    // Preloading multiple videos sequentially would replace each one
-    const firstPlayer = players.find(p => p.songVideoId);
-    if (firstPlayer) {
-      preloadQueueRef.current = [firstPlayer];
-      isPreloadingRef.current = false;
-      setTimeout(preloadNextSong, 1000);
-    }
+    // Queue all players with songs for preloading
+    preloadQueueRef.current = players.filter(p => p.songVideoId);
+    isPreloadingRef.current = false;
+
+    // Start preloading after a short delay
+    setTimeout(preloadNextSong, 1000);
   }, [currentTeam?.id, players, player.isReady]);
 
   const handleRenameTeam = (teamId, newName) => {

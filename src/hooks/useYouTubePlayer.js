@@ -181,31 +181,29 @@ export const useYouTubePlayer = () => {
     onSongEndRef.current = onEnd;
     playbackEndTimeRef.current = startTime + duration;
 
-    // Set loading state
-    setIsLoading(true);
-
     // Set volume to full immediately
     player.setVolume(100);
 
-    try {
-      // Check if this video is already preloaded/cued
-      const isPreloaded = preloadedVideoIdsRef.current.has(videoId);
+    // Check if this video is already preloaded/cued
+    const isPreloaded = preloadedVideoIdsRef.current.has(videoId);
 
-      if (isPreloaded) {
-        // Video is already buffered, just play it
-        // No need to seek since it was cued with the right startTime
-        console.log('Using preloaded video, playing immediately');
-        setIsLoading(false); // Clear loading immediately for preloaded videos
-        player.playVideo();
-        return; // Exit early, no retry needed for preloaded videos
-      } else {
-        // Video not preloaded, load it fresh
-        console.log('Loading video fresh');
-        player.loadVideoById({
-          videoId,
-          startSeconds: startTime
-        });
-      }
+    if (isPreloaded) {
+      // Video is already buffered, play immediately without loading indicator
+      console.log('Using preloaded video, playing immediately');
+      player.seekTo(startTime, true);
+      player.playVideo();
+      return; // Exit early, no loading state or retry needed
+    }
+
+    // Not preloaded - show loading indicator and load fresh
+    setIsLoading(true);
+
+    try {
+      console.log('Loading video fresh');
+      player.loadVideoById({
+        videoId,
+        startSeconds: startTime
+      });
 
       // Keep trying to play until it works or timeout (15 seconds for slow connections)
       let attempts = 0;
