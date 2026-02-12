@@ -154,21 +154,6 @@
   font-style: italic;
 }
 
-.song-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60px;
-  background: var(--bg-tertiary);
-  border-radius: 0.5rem;
-  border: 2px dashed var(--border-color);
-}
-
-.placeholder-text {
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  font-weight: 500;
-}
 
 .youtube-hidden {
   display: none;
@@ -367,16 +352,6 @@
 
   .player-item .col-actions .drag-handle {
     display: none;
-  }
-
-  /* Simplify placeholder for mobile */
-  .placeholder-text {
-    font-size: 0.8125rem;
-  }
-
-  .song-placeholder {
-    min-height: 50px;
-    padding: 0.5rem;
   }
 
   /* Adjust YouTube embed for mobile */

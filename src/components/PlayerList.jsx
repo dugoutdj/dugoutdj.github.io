@@ -88,18 +88,10 @@ export default function PlayerList({
 
           <div className="col-song">
             {player.songVideoId ? (
-              <>
-                {/* Always render YouTube player so it initializes, but hide when not selected */}
-                <div className={currentPlayerIndex === index ? '' : 'youtube-hidden'}>
-                  {youtubeEmbeds && youtubeEmbeds[index]}
-                </div>
-                {/* Show placeholder when not selected */}
-                {currentPlayerIndex !== index && (
-                  <div className="song-placeholder">
-                    <span className="placeholder-text">▶ Click to play</span>
-                  </div>
-                )}
-              </>
+              /* Always render YouTube player so it initializes, but hide when not selected */
+              <div className={currentPlayerIndex === index ? '' : 'youtube-hidden'}>
+                {youtubeEmbeds && youtubeEmbeds[index]}
+              </div>
             ) : (
               <span className="no-song">No song</span>
             )}
