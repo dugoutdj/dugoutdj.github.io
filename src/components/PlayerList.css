@@ -35,7 +35,7 @@
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
   transition: background-color 0.15s ease;
-  align-items: center;
+  align-items: start;
 }
 
 .player-item:last-child {
