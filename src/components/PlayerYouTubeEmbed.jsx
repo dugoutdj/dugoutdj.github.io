@@ -20,10 +20,16 @@ export default function PlayerYouTubeEmbed({
       return;
     }
 
-    console.log('Loading YouTube API for:', player.name);
-    loadYouTubeAPI().then((YT) => {
-      console.log('Creating YouTube player for:', player.name, `youtube-player-${player.id}`);
-      const newPlayer = new YT.Player(`youtube-player-${player.id}`, {
+    // Add a delay based on player ID to stagger initialization
+    // This prevents all players from trying to initialize at once
+    const initDelay = Math.abs(player.id % 12) * 300; // 0-3.6 seconds stagger
+
+    console.log('Loading YouTube API for:', player.name, 'with delay:', initDelay);
+
+    const timeoutId = setTimeout(() => {
+      loadYouTubeAPI().then((YT) => {
+        console.log('Creating YouTube player for:', player.name, `youtube-player-${player.id}`);
+        const newPlayer = new YT.Player(`youtube-player-${player.id}`, {
         height: '200',
         width: '100%',
         videoId: player.songVideoId,
@@ -50,9 +56,13 @@ export default function PlayerYouTubeEmbed({
           }
         }
       });
-    });
+      }).catch(error => {
+        console.error('Failed to create player for:', player.name, error);
+      });
+    }, initDelay);
 
     return () => {
+      clearTimeout(timeoutId);
       if (playerRef.current && playerRef.current.destroy) {
         playerRef.current.destroy();
       }
