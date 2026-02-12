@@ -368,4 +368,35 @@
   .player-item .col-actions .drag-handle {
     display: none;
   }
+
+  /* Simplify placeholder for mobile */
+  .placeholder-text {
+    font-size: 0.8125rem;
+  }
+
+  .song-placeholder {
+    min-height: 50px;
+    padding: 0.5rem;
+  }
+
+  /* Adjust YouTube embed for mobile */
+  .youtube-embed-container {
+    max-width: 100%;
+  }
+
+  /* Make player items more compact */
+  .player-item {
+    padding: 0.5rem;
+  }
+
+  /* Smaller action buttons on mobile */
+  .player-item .col-actions {
+    gap: 0.125rem;
+  }
+
+  .player-item .col-actions .btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.8125rem;
+  }
 }
