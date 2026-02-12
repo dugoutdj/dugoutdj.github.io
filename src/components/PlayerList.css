@@ -17,7 +17,7 @@
 
 .player-list-header {
   display: grid;
-  grid-template-columns: 50px auto 1fr 200px;
+  grid-template-columns: 50px 200px 1fr 200px;
   gap: 1rem;
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
@@ -30,12 +30,12 @@
 
 .player-item {
   display: grid;
-  grid-template-columns: 50px auto 1fr 200px;
+  grid-template-columns: 50px 200px 1fr 200px;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
   transition: background-color 0.15s ease;
-  cursor: pointer;
+  align-items: center;
 }
 
 .player-item:last-child {

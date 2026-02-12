@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadYouTubeAPI } from '../utils/youtube';
+import './PlayerYouTubeEmbed.css';
 
 export default function PlayerYouTubeEmbed({
   player,
@@ -16,12 +17,11 @@ export default function PlayerYouTubeEmbed({
 
     loadYouTubeAPI().then((YT) => {
       const newPlayer = new YT.Player(`youtube-player-${player.id}`, {
-        height: '0',
-        width: '0',
+        height: '200',
+        width: '100%',
         videoId: player.songVideoId,
         playerVars: {
-          controls: 0,
-          disablekb: 1,
+          controls: 1,
           modestbranding: 1,
           playsinline: 1,
           start: player.startTime || 0
@@ -68,7 +68,7 @@ export default function PlayerYouTubeEmbed({
     <div
       ref={containerRef}
       id={`youtube-player-${player.id}`}
-      style={{ display: 'none' }}
+      className="youtube-embed-container"
     />
   );
 }

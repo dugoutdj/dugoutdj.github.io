@@ -343,22 +343,6 @@ function App() {
           </div>
         </div>
 
-        {currentTeam && (
-          <div className="header-playback">
-            <PlaybackControls
-              currentPlayer={currentPlayerIndex !== null ? players[currentPlayerIndex] : null}
-              currentPlayerIndex={currentPlayerIndex}
-              totalPlayers={players.length}
-              isPlaying={isPlaying}
-              onPlay={handlePlay}
-              onPause={handlePause}
-              onStop={handleStop}
-              onNext={handleNext}
-              onPrevious={handlePrevious}
-              onReplay={handleReplay}
-            />
-          </div>
-        )}
 
         <div className="app-actions">
           <button
@@ -455,6 +439,15 @@ function App() {
               <PlayerList
                 players={players}
                 currentPlayerIndex={currentPlayerIndex}
+                youtubeEmbeds={players.map((rosterPlayer, index) => (
+                  <PlayerYouTubeEmbed
+                    key={rosterPlayer.id}
+                    player={rosterPlayer}
+                    isActive={currentPlayerIndex === index}
+                    onReady={handlePlayerReady}
+                    onEnded={handleSongEnded}
+                  />
+                ))}
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
                 onReorder={handleReorderPlayers}
@@ -471,16 +464,6 @@ function App() {
         </main>
       </div>
 
-      {/* Render a YouTube player for each roster player */}
-      {players.map((rosterPlayer, index) => (
-        <PlayerYouTubeEmbed
-          key={rosterPlayer.id}
-          player={rosterPlayer}
-          isActive={currentPlayerIndex === index}
-          onReady={handlePlayerReady}
-          onEnded={handleSongEnded}
-        />
-      ))}
 
       {showShareDialog && (
         <ShareDialog

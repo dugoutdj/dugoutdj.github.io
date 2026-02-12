@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { formatTime } from '../utils/youtube';
 import './PlayerList.css';
 
 export default function PlayerList({
   players,
   currentPlayerIndex,
+  youtubeEmbeds,
   onEdit,
   onDelete,
   onReorder,
@@ -87,27 +87,7 @@ export default function PlayerList({
           </div>
 
           <div className="col-song">
-            {player.songVideoId ? (
-              <div className="song-info">
-                {player.songThumbnail && (
-                  <img
-                    src={player.songThumbnail}
-                    alt={player.songTitle || player.songVideoId}
-                    className="song-thumbnail-small"
-                  />
-                )}
-                <div className="song-details">
-                  <span className="song-title" title={player.songUrl}>
-                    {player.songTitle || player.songVideoId}
-                  </span>
-                  <span className="song-time">
-                    {formatTime(player.startTime)} ({player.duration}s)
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <span className="no-song">No song</span>
-            )}
+            {youtubeEmbeds && youtubeEmbeds[index]}
           </div>
 
           <div className="col-actions">
