@@ -447,34 +447,35 @@ function App() {
               )}
 
               <div className="team-header">
-                <div>
+                <div className="team-info">
                   <h2>{currentTeam.name}</h2>
                   <p className="team-subtitle">
                     {players.length} {players.length === 1 ? 'player' : 'players'}
                   </p>
                 </div>
-                <div className="team-header-actions">
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => setShowGCImport(true)}
-                    title="Import roster from GameChanger"
-                  >
-                    📥 Import Team
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => setShowImportUpdateDialog(true)}
-                    title="Import song update from parent"
-                  >
-                    📲 Import Update
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleAddPlayer}
-                  >
-                    + Player
-                  </button>
-                </div>
+              </div>
+
+              <div className="team-header-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowGCImport(true)}
+                  title="Import roster from GameChanger"
+                >
+                  📥 Import Team
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowImportUpdateDialog(true)}
+                  title="Import song update from parent"
+                >
+                  📲 Import Update
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleAddPlayer}
+                >
+                  + Player
+                </button>
               </div>
 
               {showPlayerForm && (
