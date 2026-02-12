@@ -170,6 +170,12 @@
   font-weight: 500;
 }
 
+.youtube-hidden {
+  display: none;
+  position: absolute;
+  visibility: hidden;
+}
+
 .col-play {
   display: flex;
   align-items: flex-start;
