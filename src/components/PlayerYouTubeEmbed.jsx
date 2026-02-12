@@ -13,9 +13,16 @@ export default function PlayerYouTubeEmbed({
   const [ytPlayer, setYtPlayer] = useState(null);
 
   useEffect(() => {
-    if (!player.songVideoId) return;
+    console.log('PlayerYouTubeEmbed mounting for:', player.name, player.id);
 
+    if (!player.songVideoId) {
+      console.log('No songVideoId for:', player.name);
+      return;
+    }
+
+    console.log('Loading YouTube API for:', player.name);
     loadYouTubeAPI().then((YT) => {
+      console.log('Creating YouTube player for:', player.name, `youtube-player-${player.id}`);
       const newPlayer = new YT.Player(`youtube-player-${player.id}`, {
         height: '200',
         width: '100%',
@@ -28,9 +35,13 @@ export default function PlayerYouTubeEmbed({
         },
         events: {
           onReady: (event) => {
+            console.log('YouTube player ready for:', player.name, player.id);
             playerRef.current = event.target;
             setYtPlayer(event.target);
-            if (onReady) onReady(player.id, event.target);
+            if (onReady) {
+              console.log('Calling onReady callback for:', player.name);
+              onReady(player.id, event.target);
+            }
           },
           onStateChange: (event) => {
             if (event.data === YT.PlayerState.ENDED && onEnded) {
