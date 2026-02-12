@@ -159,7 +159,8 @@ function App() {
     setCurrentPlayerIndex(index);
     setIsPlaying(true);
 
-    // Play this player's song
+    // Seek to start time and play (always restart from beginning)
+    ytPlayer.seekTo(targetPlayer.startTime || 0, true);
     ytPlayer.setVolume(100);
     ytPlayer.playVideo();
   };
