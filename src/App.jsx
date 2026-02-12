@@ -34,7 +34,15 @@ function App() {
   const playerInstancesRef = useRef({});
 
   const currentTeam = storage.currentTeam;
-  const players = currentTeam?.players || [];
+  const rawPlayers = currentTeam?.players || [];
+
+  // Sort players: enabled first (by order), disabled last (by order)
+  const players = [...rawPlayers].sort((a, b) => {
+    if (a.disabled === b.disabled) {
+      return (a.order || 0) - (b.order || 0);
+    }
+    return a.disabled ? 1 : -1;
+  });
 
   // Initialize first team if none exists
   useEffect(() => {

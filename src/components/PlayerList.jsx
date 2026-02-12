@@ -14,14 +14,6 @@ export default function PlayerList({
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
-  // Sort players: enabled first (by order), disabled last (by order)
-  const sortedPlayers = [...players].sort((a, b) => {
-    if (a.disabled === b.disabled) {
-      return (a.order || 0) - (b.order || 0);
-    }
-    return a.disabled ? 1 : -1;
-  });
-
   const handleDragStart = (e, index) => {
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
@@ -76,18 +68,16 @@ export default function PlayerList({
         <span className="col-actions">Actions</span>
       </div>
 
-      {sortedPlayers.map((player, index) => {
-        // Find original index for playback
-        const originalIndex = players.findIndex(p => p.id === player.id);
+      {players.map((player, index) => {
         const isDisabled = player.disabled;
         // Count only enabled players before this one for order number
-        const enabledIndex = sortedPlayers.slice(0, index).filter(p => !p.disabled).length;
+        const enabledIndex = players.slice(0, index).filter(p => !p.disabled).length;
 
         return (
         <div
           key={player.id}
-          className={`player-item ${currentPlayerIndex === originalIndex ? 'current' : ''} ${isDisabled ? 'disabled' : ''}`}
-          onClick={() => !isDisabled && onPlayPlayer(originalIndex)}
+          className={`player-item ${currentPlayerIndex === index ? 'current' : ''} ${isDisabled ? 'disabled' : ''}`}
+          onClick={() => !isDisabled && onPlayPlayer(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           style={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
         >
@@ -176,11 +166,11 @@ export default function PlayerList({
               className="btn btn-danger btn-sm"
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`Delete player "${player.name}"?`)) {
+                if (confirm(`⚠️ Delete "${player.name}"?\n\nThis cannot be undone!`)) {
                   onDelete(player.id);
                 }
               }}
-              title="Delete player"
+              title="Delete player (cannot be undone)"
             >
               🗑️
             </button>
