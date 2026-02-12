@@ -459,7 +459,7 @@ function App() {
                     onClick={() => setShowGCImport(true)}
                     title="Import roster from GameChanger"
                   >
-                    📥 Import Team Roster
+                    📥 Import Team
                   </button>
                   <button
                     className="btn btn-secondary"
@@ -472,7 +472,7 @@ function App() {
                     className="btn btn-primary"
                     onClick={handleAddPlayer}
                   >
-                    + Add Player
+                    + Player
                   </button>
                 </div>
               </div>
