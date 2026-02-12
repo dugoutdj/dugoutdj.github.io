@@ -154,6 +154,22 @@
   font-style: italic;
 }
 
+.song-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+  border: 2px dashed var(--border-color);
+}
+
+.placeholder-text {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
 .col-play {
   display: flex;
   align-items: flex-start;

@@ -87,7 +87,17 @@ export default function PlayerList({
           </div>
 
           <div className="col-song">
-            {youtubeEmbeds && youtubeEmbeds[index]}
+            {currentPlayerIndex === index ? (
+              youtubeEmbeds && youtubeEmbeds[index]
+            ) : (
+              player.songVideoId ? (
+                <div className="song-placeholder">
+                  <span className="placeholder-text">▶ Click to play</span>
+                </div>
+              ) : (
+                <span className="no-song">No song</span>
+              )
+            )}
           </div>
 
           <div className="col-actions">
