@@ -8,7 +8,8 @@ export default function PlayerList({
   onEdit,
   onDelete,
   onReorder,
-  onPlayPlayer
+  onPlayPlayer,
+  onShare
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
@@ -130,6 +131,18 @@ export default function PlayerList({
             >
               ✏️
             </button>
+            {onShare && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(player);
+                }}
+                title="Share song form with parent"
+              >
+                📤
+              </button>
+            )}
             <button
               className="btn btn-danger btn-sm"
               onClick={(e) => {

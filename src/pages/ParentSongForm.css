@@ -1,0 +1,249 @@
+.parent-form-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 1rem;
+}
+
+.parent-form-header {
+  text-align: center;
+  color: white;
+  margin-bottom: 2rem;
+}
+
+.parent-form-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.parent-form-header h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.player-name-display {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.parent-form-content {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.parent-form-error {
+  background: white;
+  border-radius: 1rem;
+  padding: 3rem 2rem;
+  max-width: 500px;
+  width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.parent-form-error h2 {
+  color: #dc2626;
+  margin-bottom: 1rem;
+}
+
+.form-section {
+  margin-bottom: 1.5rem;
+}
+
+.form-section label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.field-help {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.url-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.url-form input {
+  flex: 1;
+}
+
+.url-form .btn {
+  flex-shrink: 0;
+}
+
+.error-box {
+  background: #fef2f2;
+  border: 2px solid #fecaca;
+  color: #dc2626;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 1.5rem 0;
+  color: var(--text-secondary);
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.form-divider span {
+  padding: 0 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.song-preview {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+
+.song-preview-thumbnail {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
+
+.song-preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-preview-info strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.code-generated {
+  text-align: center;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #10b981;
+  color: white;
+  font-size: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+}
+
+.code-generated h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+}
+
+.update-code-display {
+  background: var(--bg-secondary);
+  border: 2px solid var(--primary-color);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.update-code-display code {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  word-break: break-all;
+  font-family: 'Courier New', monospace;
+}
+
+.instructions {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+}
+
+.instructions p {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.instructions .note {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+}
+
+.btn-lg {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.125rem;
+  margin-bottom: 1rem;
+}
+
+.parent-form-footer {
+  text-align: center;
+  color: white;
+  margin-top: 2rem;
+  opacity: 0.8;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .parent-form-container {
+    padding: 1rem 0.5rem;
+  }
+
+  .parent-form-header h1 {
+    font-size: 2rem;
+  }
+
+  .parent-form-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .parent-form-content {
+    padding: 1.5rem;
+  }
+
+  .song-preview {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .song-preview-thumbnail {
+    width: 100%;
+    max-width: 280px;
+  }
+}

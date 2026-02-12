@@ -6,6 +6,8 @@ import PlayerForm from './components/PlayerForm';
 import PlaybackControls from './components/PlaybackControls';
 import PlayerYouTubeEmbed from './components/PlayerYouTubeEmbed';
 import ShareDialog from './components/ShareDialog';
+import PlayerShareDialog from './components/PlayerShareDialog';
+import ImportUpdateDialog from './components/ImportUpdateDialog';
 import GameChangerImport from './components/GameChangerImport';
 import { importFromGameChanger } from './utils/gamechanger';
 import './App.css';
@@ -16,6 +18,9 @@ function App() {
   const [showPlayerForm, setShowPlayerForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showPlayerShareDialog, setShowPlayerShareDialog] = useState(false);
+  const [sharingPlayer, setSharingPlayer] = useState(null);
+  const [showImportUpdateDialog, setShowImportUpdateDialog] = useState(false);
   const [showGCImport, setShowGCImport] = useState(false);
   const [gcImportLoading, setGcImportLoading] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
@@ -302,6 +307,33 @@ function App() {
     }
   };
 
+  const handleSharePlayer = (player) => {
+    setSharingPlayer(player);
+    setShowPlayerShareDialog(true);
+  };
+
+  const handleSongUpdate = (updateData) => {
+    const { playerId, songVideoId, songTitle, songThumbnail, songUrl, startTime, duration } = updateData;
+
+    // Find the player and update their song
+    const player = players.find(p => p.id === playerId);
+    if (!player) {
+      alert('Player not found!');
+      return;
+    }
+
+    storage.updatePlayer(currentTeam.id, playerId, {
+      songUrl,
+      songVideoId,
+      songTitle,
+      songThumbnail,
+      startTime,
+      duration
+    });
+
+    alert(`✓ Updated ${player.name}'s song to "${songTitle}"`);
+  };
+
   const handleGameChangerImport = async (teamId, token) => {
     setGcImportLoading(true);
 
@@ -427,7 +459,14 @@ function App() {
                     onClick={() => setShowGCImport(true)}
                     title="Import roster from GameChanger"
                   >
-                    📥 Import
+                    📥 Import Team Roster
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowImportUpdateDialog(true)}
+                    title="Import song update from parent"
+                  >
+                    📲 Import Update
                   </button>
                   <button
                     className="btn btn-primary"
@@ -465,6 +504,7 @@ function App() {
                 onDelete={handleDeletePlayer}
                 onReorder={handleReorderPlayers}
                 onPlayPlayer={handlePlayPlayer}
+                onShare={handleSharePlayer}
               />
             </>
           )}
@@ -483,6 +523,25 @@ function App() {
           data={storage.data}
           onImport={handleImport}
           onClose={() => setShowShareDialog(false)}
+        />
+      )}
+
+      {showPlayerShareDialog && sharingPlayer && (
+        <PlayerShareDialog
+          player={sharingPlayer}
+          teamId={currentTeam?.id}
+          onClose={() => {
+            setShowPlayerShareDialog(false);
+            setSharingPlayer(null);
+          }}
+        />
+      )}
+
+      {showImportUpdateDialog && (
+        <ImportUpdateDialog
+          players={players}
+          onImport={handleSongUpdate}
+          onClose={() => setShowImportUpdateDialog(false)}
         />
       )}
 
