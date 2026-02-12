@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import TeamSelector from './components/TeamSelector';
 import PlayerList from './components/PlayerList';
@@ -37,12 +37,14 @@ function App() {
   const rawPlayers = currentTeam?.players || [];
 
   // Sort players: enabled first (by order), disabled last (by order)
-  const players = [...rawPlayers].sort((a, b) => {
-    if (a.disabled === b.disabled) {
-      return (a.order || 0) - (b.order || 0);
-    }
-    return a.disabled ? 1 : -1;
-  });
+  const players = useMemo(() => {
+    return [...rawPlayers].sort((a, b) => {
+      if (a.disabled === b.disabled) {
+        return (a.order || 0) - (b.order || 0);
+      }
+      return a.disabled ? 1 : -1;
+    });
+  }, [rawPlayers]);
 
   // Initialize first team if none exists
   useEffect(() => {
@@ -369,6 +371,19 @@ function App() {
     alert(`✓ Updated ${player.name}'s song to "${songTitle}"`);
   };
 
+  // Memoize YouTube embeds to prevent unnecessary recreation
+  const youtubeEmbeds = useMemo(() => {
+    return players.map((rosterPlayer, index) => (
+      <PlayerYouTubeEmbed
+        key={rosterPlayer.id}
+        player={rosterPlayer}
+        isActive={currentPlayerIndex === index}
+        onReady={handlePlayerReady}
+        onEnded={handleSongEnded}
+      />
+    ));
+  }, [players, currentPlayerIndex]);
+
   const handleGameChangerImport = async (teamId, token) => {
     setGcImportLoading(true);
 
@@ -527,15 +542,7 @@ function App() {
               <PlayerList
                 players={players}
                 currentPlayerIndex={currentPlayerIndex}
-                youtubeEmbeds={players.map((rosterPlayer, index) => (
-                  <PlayerYouTubeEmbed
-                    key={`${rosterPlayer.id}-${index}`}
-                    player={rosterPlayer}
-                    isActive={currentPlayerIndex === index}
-                    onReady={handlePlayerReady}
-                    onEnded={handleSongEnded}
-                  />
-                ))}
+                youtubeEmbeds={youtubeEmbeds}
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
                 onToggleDisabled={handleToggleDisabled}
