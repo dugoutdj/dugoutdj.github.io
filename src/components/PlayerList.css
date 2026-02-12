@@ -64,8 +64,6 @@
   text-decoration: line-through;
   color: var(--text-secondary);
 }
-  border-left: 3px solid var(--primary-color);
-}
 
 .col-order {
   display: flex;
