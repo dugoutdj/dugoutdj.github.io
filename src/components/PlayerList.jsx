@@ -37,15 +37,22 @@ export default function PlayerList({
   };
 
   const movePlayer = (index, direction) => {
-    if (
-      (direction === 'up' && index === 0) ||
-      (direction === 'down' && index === players.length - 1)
-    ) {
+    const player = players[index];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+    // Can't move if at boundary
+    if (newIndex < 0 || newIndex >= players.length) {
+      return;
+    }
+
+    const adjacentPlayer = players[newIndex];
+
+    // Can't move if crossing disabled boundary
+    if (player.disabled !== adjacentPlayer.disabled) {
       return;
     }
 
     const newPlayers = [...players];
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
     [newPlayers[index], newPlayers[newIndex]] = [newPlayers[newIndex], newPlayers[index]];
     onReorder(newPlayers);
   };

@@ -157,7 +157,14 @@ function App() {
 
   const handleReorderPlayers = (reorderedPlayers) => {
     if (!currentTeam) return;
-    storage.reorderPlayers(currentTeam.id, reorderedPlayers);
+
+    // Assign order numbers based on position in the reordered array
+    const playersWithUpdatedOrder = reorderedPlayers.map((player, index) => ({
+      ...player,
+      order: index
+    }));
+
+    storage.reorderPlayers(currentTeam.id, playersWithUpdatedOrder);
   };
 
   const handlePlayPlayer = (index) => {
