@@ -129,15 +129,27 @@ function App() {
   };
 
   const handlePlayPlayer = (index) => {
-    if (!players[index] || !players[index].songVideoId) return;
+    console.log('handlePlayPlayer called with index:', index);
+    console.log('Total players:', players.length);
+    console.log('Player instances:', Object.keys(playerInstancesRef.current));
+
+    if (!players[index] || !players[index].songVideoId) {
+      console.warn('No player at index or no songVideoId');
+      return;
+    }
 
     const targetPlayer = players[index];
+    console.log('Target player:', targetPlayer.name, targetPlayer.id);
+
     const ytPlayer = playerInstancesRef.current[targetPlayer.id];
 
     if (!ytPlayer) {
-      console.warn('Player not ready yet');
+      console.warn('Player not ready yet for:', targetPlayer.name);
+      console.warn('Available players:', Object.keys(playerInstancesRef.current));
       return;
     }
+
+    console.log('Playing:', targetPlayer.name);
 
     // Stop any currently playing player
     Object.values(playerInstancesRef.current).forEach(p => {
