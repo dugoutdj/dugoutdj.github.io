@@ -521,7 +521,7 @@ function App() {
                 currentPlayerIndex={currentPlayerIndex}
                 youtubeEmbeds={players.map((rosterPlayer, index) => (
                   <PlayerYouTubeEmbed
-                    key={rosterPlayer.id}
+                    key={`${rosterPlayer.id}-${index}`}
                     player={rosterPlayer}
                     isActive={currentPlayerIndex === index}
                     onReady={handlePlayerReady}
