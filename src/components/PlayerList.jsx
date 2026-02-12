@@ -7,11 +7,20 @@ export default function PlayerList({
   youtubeEmbeds,
   onEdit,
   onDelete,
+  onToggleDisabled,
   onReorder,
   onPlayPlayer,
   onShare
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
+
+  // Sort players: enabled first (by order), disabled last (by order)
+  const sortedPlayers = [...players].sort((a, b) => {
+    if (a.disabled === b.disabled) {
+      return (a.order || 0) - (b.order || 0);
+    }
+    return a.disabled ? 1 : -1;
+  });
 
   const handleDragStart = (e, index) => {
     setDraggedIndex(index);
@@ -67,15 +76,23 @@ export default function PlayerList({
         <span className="col-actions">Actions</span>
       </div>
 
-      {players.map((player, index) => (
+      {sortedPlayers.map((player, index) => {
+        // Find original index for playback
+        const originalIndex = players.findIndex(p => p.id === player.id);
+        const isDisabled = player.disabled;
+        // Count only enabled players before this one for order number
+        const enabledIndex = sortedPlayers.slice(0, index).filter(p => !p.disabled).length;
+
+        return (
         <div
           key={player.id}
-          className={`player-item ${currentPlayerIndex === index ? 'current' : ''}`}
-          onClick={() => onPlayPlayer(index)}
+          className={`player-item ${currentPlayerIndex === originalIndex ? 'current' : ''} ${isDisabled ? 'disabled' : ''}`}
+          onClick={() => !isDisabled && onPlayPlayer(originalIndex)}
           onDragOver={(e) => handleDragOver(e, index)}
+          style={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
         >
           <div className="col-order">
-            <span className="order-number">{index + 1}</span>
+            {!isDisabled && <span className="order-number">{enabledIndex + 1}</span>}
           </div>
 
           <div className="col-player">
@@ -143,6 +160,18 @@ export default function PlayerList({
                 📤
               </button>
             )}
+            {onToggleDisabled && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleDisabled(player.id);
+                }}
+                title={isDisabled ? "Enable player" : "Disable player (didn't show up)"}
+              >
+                🚫
+              </button>
+            )}
             <button
               className="btn btn-danger btn-sm"
               onClick={(e) => {
@@ -188,7 +217,8 @@ export default function PlayerList({
             </span>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

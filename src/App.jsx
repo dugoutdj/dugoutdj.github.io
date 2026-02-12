@@ -128,6 +128,25 @@ function App() {
     }
   };
 
+  const handleToggleDisabled = (playerId) => {
+    if (!currentTeam) return;
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+
+    storage.updatePlayer(currentTeam.id, playerId, {
+      disabled: !player.disabled
+    });
+
+    // Reset current player if disabling the active one
+    if (currentPlayerIndex !== null) {
+      const activePlayer = players[currentPlayerIndex];
+      if (activePlayer && activePlayer.id === playerId && !player.disabled) {
+        setCurrentPlayerIndex(null);
+        setIsPlaying(false);
+      }
+    }
+  };
+
   const handleReorderPlayers = (reorderedPlayers) => {
     if (!currentTeam) return;
     storage.reorderPlayers(currentTeam.id, reorderedPlayers);
@@ -503,6 +522,7 @@ function App() {
                 ))}
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
+                onToggleDisabled={handleToggleDisabled}
                 onReorder={handleReorderPlayers}
                 onPlayPlayer={handlePlayPlayer}
                 onShare={handleSharePlayer}

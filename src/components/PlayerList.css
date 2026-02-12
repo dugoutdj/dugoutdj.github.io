@@ -48,6 +48,22 @@
 
 .player-item.current {
   background: rgb(37 99 235 / 0.05);
+}
+
+.player-item.disabled {
+  opacity: 0.5;
+  background: var(--bg-tertiary);
+}
+
+.player-item.disabled:hover {
+  background: var(--bg-tertiary);
+}
+
+.player-item.disabled .player-name,
+.player-item.disabled .song-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
   border-left: 3px solid var(--primary-color);
 }
 
