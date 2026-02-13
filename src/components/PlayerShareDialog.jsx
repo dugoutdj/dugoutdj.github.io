@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { generateParentFormUrl } from '../utils/updateCode';
 import './PlayerShareDialog.css';
 
 export default function PlayerShareDialog({ player, teamId, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   if (!player) return null;
 
@@ -40,21 +42,46 @@ export default function PlayerShareDialog({ player, teamId, onClose }) {
             Send this link to {player.name}'s parent so they can choose a walk-up song.
           </p>
 
-          <div className="share-url-box">
-            <code className="share-url">{shareUrl}</code>
-          </div>
+          {!showQR ? (
+            <>
+              <div className="share-url-box">
+                <code className="share-url">{shareUrl}</code>
+              </div>
 
-          <div className="share-actions">
-            <button className="btn btn-primary" onClick={handleCopy}>
-              {copied ? '✓ Copied!' : '📋 Copy Link'}
-            </button>
-            <button className="btn btn-secondary" onClick={handleSendText}>
-              💬 Send Text
-            </button>
-            <button className="btn btn-secondary" onClick={handleSendEmail}>
-              📧 Send Email
-            </button>
-          </div>
+              <div className="share-actions">
+                <button className="btn btn-primary" onClick={handleCopy}>
+                  {copied ? '✓ Copied!' : '📋 Copy Link'}
+                </button>
+                <button className="btn btn-secondary" onClick={handleSendText}>
+                  💬 Send Text
+                </button>
+                <button className="btn btn-secondary" onClick={handleSendEmail}>
+                  📧 Send Email
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowQR(true)}>
+                  📱 Show QR Code
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="qr-code-container">
+                <QRCodeSVG
+                  value={shareUrl}
+                  size={256}
+                  level="M"
+                  includeMargin={true}
+                />
+                <p className="qr-instructions">
+                  Scan this QR code with a phone camera to open the song selection form
+                </p>
+              </div>
+
+              <button className="btn btn-secondary" onClick={() => setShowQR(false)}>
+                ← Back to Options
+              </button>
+            </>
+          )}
 
           <div className="share-help">
             <p className="help-title">How it works:</p>
