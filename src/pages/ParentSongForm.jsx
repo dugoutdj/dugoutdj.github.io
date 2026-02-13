@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { extractVideoId, fetchVideoInfo } from '../utils/youtube';
 import { generateUpdateCode } from '../utils/updateCode';
 import { SUGGESTED_SONGS } from '../constants/suggestedSongs';
@@ -18,6 +19,7 @@ export default function ParentSongForm() {
   const [duration, setDuration] = useState(20);
   const [updateCode, setUpdateCode] = useState('');
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -251,21 +253,57 @@ export default function ParentSongForm() {
             <div className="success-icon">✓</div>
             <h3>Update Code Generated!</h3>
 
-            <div className="update-code-display">
-              <code>{updateCode}</code>
-            </div>
+            {!showQR ? (
+              <>
+                <div className="update-code-display">
+                  <code>{updateCode}</code>
+                </div>
 
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={handleCopyCode}
-            >
-              {copied ? '✓ Copied!' : 'Copy Code'}
-            </button>
+                <button
+                  className="btn btn-primary btn-lg"
+                  onClick={handleCopyCode}
+                >
+                  {copied ? '✓ Copied!' : '📋 Copy Code'}
+                </button>
 
-            <div className="instructions">
-              <p>Copy this code and send it to your team manager via text or email.</p>
-              <p className="note">They will use it to update {playerName}'s song.</p>
-            </div>
+                <button
+                  className="btn btn-secondary btn-lg"
+                  onClick={() => setShowQR(true)}
+                >
+                  📱 Show QR Code
+                </button>
+
+                <div className="instructions">
+                  <p>Copy this code and send it to your team manager, or show them the QR code.</p>
+                  <p className="note">They will use it to update {playerName}'s song.</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="qr-code-container">
+                  <QRCodeSVG
+                    value={updateCode}
+                    size={256}
+                    level="H"
+                    includeMargin={true}
+                  />
+                  <p className="qr-instructions">
+                    Have your team manager scan this QR code to get the update code
+                  </p>
+                </div>
+
+                <button
+                  className="btn btn-secondary btn-lg"
+                  onClick={() => setShowQR(false)}
+                >
+                  ← Back to Code
+                </button>
+
+                <div className="instructions">
+                  <p className="note">The manager will scan this and paste the code into "Import Update"</p>
+                </div>
+              </>
+            )}
 
             <button
               className="btn btn-secondary"

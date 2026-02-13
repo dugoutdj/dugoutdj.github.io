@@ -212,6 +212,34 @@
   margin-bottom: 1rem;
 }
 
+.qr-code-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  border: 2px solid var(--border-color);
+}
+
+.qr-code-container svg {
+  border: 4px solid var(--bg-secondary);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+}
+
+.qr-instructions {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
 .parent-form-footer {
   text-align: center;
   color: white;
