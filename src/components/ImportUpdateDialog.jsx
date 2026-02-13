@@ -3,8 +3,8 @@ import { parseUpdateCode } from '../utils/updateCode';
 import { fetchVideoInfo } from '../utils/youtube';
 import './ImportUpdateDialog.css';
 
-export default function ImportUpdateDialog({ players, onImport, onClose }) {
-  const [code, setCode] = useState('');
+export default function ImportUpdateDialog({ players, onImport, onClose, initialCode = '' }) {
+  const [code, setCode] = useState(initialCode);
   const [parsedData, setParsedData] = useState(null);
   const [songMetadata, setSongMetadata] = useState(null);
   const [error, setError] = useState('');

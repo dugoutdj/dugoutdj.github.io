@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import TeamSelector from './components/TeamSelector';
 import PlayerList from './components/PlayerList';
@@ -14,6 +15,7 @@ import './App.css';
 
 function App() {
   const storage = useLocalStorage();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [showPlayerForm, setShowPlayerForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
@@ -21,6 +23,7 @@ function App() {
   const [showPlayerShareDialog, setShowPlayerShareDialog] = useState(false);
   const [sharingPlayer, setSharingPlayer] = useState(null);
   const [showImportUpdateDialog, setShowImportUpdateDialog] = useState(false);
+  const [importUpdateCode, setImportUpdateCode] = useState('');
   const [showGCImport, setShowGCImport] = useState(false);
   const [gcImportLoading, setGcImportLoading] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
@@ -73,6 +76,19 @@ function App() {
       }
     }
   }, []);
+
+  // Check for update code from QR scan on mount
+  useEffect(() => {
+    const code = searchParams.get('code');
+    if (code) {
+      // Remove code param from URL
+      setSearchParams({});
+
+      // Open import dialog with the code
+      setImportUpdateCode(code);
+      setShowImportUpdateDialog(true);
+    }
+  }, [searchParams, setSearchParams]);
 
   // Preload disabled to prevent playback interference
   // TODO: Re-enable preloading after fixing playback issues
@@ -585,7 +601,11 @@ function App() {
         <ImportUpdateDialog
           players={players}
           onImport={handleSongUpdate}
-          onClose={() => setShowImportUpdateDialog(false)}
+          onClose={() => {
+            setShowImportUpdateDialog(false);
+            setImportUpdateCode('');
+          }}
+          initialCode={importUpdateCode}
         />
       )}
 

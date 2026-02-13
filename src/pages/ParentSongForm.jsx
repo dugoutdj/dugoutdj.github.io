@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { extractVideoId, fetchVideoInfo } from '../utils/youtube';
-import { generateUpdateCode } from '../utils/updateCode';
+import { generateUpdateCode, generateUpdateCodeUrl } from '../utils/updateCode';
 import { SUGGESTED_SONGS } from '../constants/suggestedSongs';
 import './ParentSongForm.css';
 
@@ -282,13 +282,13 @@ export default function ParentSongForm() {
               <>
                 <div className="qr-code-container">
                   <QRCodeSVG
-                    value={updateCode}
+                    value={generateUpdateCodeUrl(updateCode)}
                     size={256}
                     level="H"
                     includeMargin={true}
                   />
                   <p className="qr-instructions">
-                    Have your team manager scan this QR code to get the update code
+                    Have your team manager scan this QR code to automatically open the app with the update code
                   </p>
                 </div>
 
@@ -300,7 +300,7 @@ export default function ParentSongForm() {
                 </button>
 
                 <div className="instructions">
-                  <p className="note">The manager will scan this and paste the code into "Import Update"</p>
+                  <p className="note">Scanning opens Dugout DJ with the update code ready to import</p>
                 </div>
               </>
             )}

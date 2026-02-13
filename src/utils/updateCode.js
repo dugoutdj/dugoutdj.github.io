@@ -75,3 +75,14 @@ export function generateParentFormUrl(playerId, playerName, teamId) {
   });
   return `${baseUrl}/#/parent?${params.toString()}`;
 }
+
+/**
+ * Generate a URL that opens the app with an update code pre-filled
+ */
+export function generateUpdateCodeUrl(updateCode) {
+  const baseUrl = window.location.origin;
+  const params = new URLSearchParams({
+    code: updateCode
+  });
+  return `${baseUrl}/#/?${params.toString()}`;
+}
