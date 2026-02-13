@@ -73,5 +73,5 @@ export function generateParentFormUrl(playerId, playerName, teamId) {
     pn: playerName,
     tid: teamId
   });
-  return `${baseUrl}/parent?${params.toString()}`;
+  return `${baseUrl}/#/parent?${params.toString()}`;
 }
