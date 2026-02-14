@@ -544,17 +544,6 @@ function App() {
                 </button>
               </div>
 
-              {showPlayerForm && (
-                <PlayerForm
-                  player={editingPlayer}
-                  onSave={handleSavePlayer}
-                  onCancel={() => {
-                    setShowPlayerForm(false);
-                    setEditingPlayer(null);
-                  }}
-                />
-              )}
-
               <PlayerList
                 players={players}
                 currentPlayerIndex={currentPlayerIndex}
@@ -606,6 +595,17 @@ function App() {
             setImportUpdateCode('');
           }}
           initialCode={importUpdateCode}
+        />
+      )}
+
+      {showPlayerForm && (
+        <PlayerForm
+          player={editingPlayer}
+          onSave={handleSavePlayer}
+          onCancel={() => {
+            setShowPlayerForm(false);
+            setEditingPlayer(null);
+          }}
         />
       )}
 

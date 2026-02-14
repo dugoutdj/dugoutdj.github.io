@@ -116,9 +116,14 @@ export default function PlayerForm({ player, onSave, onCancel }) {
   };
 
   return (
-    <div className="player-form-container">
-      <form onSubmit={handleSubmit} className="player-form">
-        <h3>{player ? 'Edit Player' : 'Add Player'}</h3>
+    <div className="dialog-overlay" onClick={onCancel}>
+      <div className="dialog player-form-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-header">
+          <h3>{player ? 'Edit Player' : 'Add Player'}</h3>
+          <button type="button" className="dialog-close" onClick={onCancel}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="player-form">
 
         <div className="form-group">
           <label>Player Name *</label>
@@ -246,14 +251,15 @@ export default function PlayerForm({ player, onSave, onCancel }) {
             Cancel
           </button>
         </div>
-      </form>
+        </form>
 
-      {showSearch && (
-        <SongSearch
-          onSelect={handleSongSelect}
-          onClose={() => setShowSearch(false)}
-        />
-      )}
+        {showSearch && (
+          <SongSearch
+            onSelect={handleSongSelect}
+            onClose={() => setShowSearch(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }
