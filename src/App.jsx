@@ -9,8 +9,10 @@ import PlayerYouTubeEmbed from './components/PlayerYouTubeEmbed';
 import ShareDialog from './components/ShareDialog';
 import PlayerShareDialog from './components/PlayerShareDialog';
 import ImportUpdateDialog from './components/ImportUpdateDialog';
+import PendingOverridesDialog from './components/PendingOverridesDialog';
 import GameChangerImport from './components/GameChangerImport';
 import { importFromGameChanger } from './utils/gamechanger';
+import { WORKER_URL } from './constants/worker';
 import './App.css';
 
 function App() {
@@ -24,6 +26,9 @@ function App() {
   const [sharingPlayer, setSharingPlayer] = useState(null);
   const [showImportUpdateDialog, setShowImportUpdateDialog] = useState(false);
   const [importUpdateCode, setImportUpdateCode] = useState('');
+  const [showImportOverrideDialog, setShowImportOverrideDialog] = useState(false);
+  const [pendingCloudOverrides, setPendingCloudOverrides] = useState([]);
+  const [showPendingDialog, setShowPendingDialog] = useState(false);
   const [showGCImport, setShowGCImport] = useState(false);
   const [gcImportLoading, setGcImportLoading] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
@@ -35,6 +40,8 @@ function App() {
 
   // Track YouTube player instances - one per roster player
   const playerInstancesRef = useRef({});
+  // Track currently loaded video ID per player (to detect when reload is needed after override)
+  const loadedVideoIdsRef = useRef({});
 
   const currentTeam = storage.currentTeam;
   const rawPlayers = currentTeam?.players || [];
@@ -89,6 +96,27 @@ function App() {
       setShowImportUpdateDialog(true);
     }
   }, [searchParams, setSearchParams]);
+
+  // Poll for paid cloud overrides every 30 seconds
+  useEffect(() => {
+    if (!currentTeam) return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${WORKER_URL}/api/pending/${currentTeam.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPendingCloudOverrides(data);
+        }
+      } catch {
+        // Network errors are silent — operator may be offline
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => clearInterval(interval);
+  }, [currentTeam?.id]);
 
   // Preload disabled to prevent playback interference
   // TODO: Re-enable preloading after fixing playback issues
@@ -214,13 +242,29 @@ function App() {
       if (p && p.pauseVideo) p.pauseVideo();
     });
 
+    // If moving to a different player, their at-bat is over — consume their override
+    if (currentPlayerIndex !== null && currentPlayerIndex !== index) {
+      consumeOverride(currentPlayerIndex);
+    }
+
     setCurrentPlayerIndex(index);
     setIsPlaying(true);
 
-    // Seek to start time and play (always restart from beginning)
-    ytPlayer.seekTo(targetPlayer.startTime || 0, true);
+    // Determine target video and start time (first queued override takes precedence)
+    const override = targetPlayer.songOverrideQueue?.[0] ?? null;
+    const targetVideoId = override ? override.videoId : targetPlayer.songVideoId;
+    const targetStartTime = override ? (override.startTime ?? 0) : (targetPlayer.startTime || 0);
+
     ytPlayer.setVolume(100);
-    ytPlayer.playVideo();
+
+    // Only call loadVideoById if the loaded video differs from what we want to play
+    if (loadedVideoIdsRef.current[targetPlayer.id] !== targetVideoId) {
+      ytPlayer.loadVideoById({ videoId: targetVideoId, startSeconds: targetStartTime });
+      loadedVideoIdsRef.current[targetPlayer.id] = targetVideoId;
+    } else {
+      ytPlayer.seekTo(targetStartTime, true);
+      ytPlayer.playVideo();
+    }
   };
 
   const handlePlay = () => {
@@ -242,6 +286,8 @@ function App() {
   };
 
   const handleStop = () => {
+    // At-bat is abandoned — consume the current player's override
+    consumeOverride(currentPlayerIndex);
     Object.values(playerInstancesRef.current).forEach(p => {
       if (p && p.pauseVideo) p.pauseVideo();
     });
@@ -273,16 +319,45 @@ function App() {
     }
   };
 
+  // Shift the first override off a player's queue (their at-bat is over)
+  const consumeOverride = (playerIndex) => {
+    if (playerIndex === null || !currentTeam) return;
+    const p = players[playerIndex];
+    if (!p?.songOverrideQueue?.length) return;
+    const remaining = p.songOverrideQueue.slice(1);
+    storage.updatePlayer(currentTeam.id, p.id, {
+      songOverrideQueue: remaining.length > 0 ? remaining : null
+    });
+  };
+
   // Handle when a player instance is ready
   const handlePlayerReady = (playerId, ytPlayer) => {
     playerInstancesRef.current[playerId] = ytPlayer;
+    // Record the initially loaded video so we can detect when reloading is needed
+    const player = players.find(p => p.id === playerId);
+    loadedVideoIdsRef.current[playerId] = player?.songVideoId;
     console.log(`Player ${playerId} ready`);
   };
 
-  // Handle when a song ends
+  // Handle when a song ends — shift the first queued override off so the next one is ready
   const handleSongEnded = (playerId) => {
+    if (currentTeam) {
+      const player = players.find(p => p.id === playerId);
+      if (player?.songOverrideQueue?.length > 0) {
+        const remaining = player.songOverrideQueue.slice(1);
+        storage.updatePlayer(currentTeam.id, playerId, {
+          songOverrideQueue: remaining.length > 0 ? remaining : null
+        });
+      }
+    }
     setIsPlaying(false);
     setCurrentPlayerIndex(null);
+  };
+
+  // Cancel all queued overrides without playing
+  const handleCancelOverride = (playerId) => {
+    if (!currentTeam) return;
+    storage.updatePlayer(currentTeam.id, playerId, { songOverrideQueue: null });
   };
 
   const handleRenameTeam = (teamId, newName) => {
@@ -366,7 +441,7 @@ function App() {
   };
 
   const handleSongUpdate = (updateData) => {
-    const { playerId, songVideoId, songTitle, songThumbnail, songUrl, startTime, duration } = updateData;
+    const { playerId, songVideoId, songTitle, songThumbnail, songUrl, startTime, duration, isOverride } = updateData;
 
     // Find the player and update their song
     const player = players.find(p => p.id === playerId);
@@ -375,16 +450,25 @@ function App() {
       return;
     }
 
-    storage.updatePlayer(currentTeam.id, playerId, {
-      songUrl,
-      songVideoId,
-      songTitle,
-      songThumbnail,
-      startTime,
-      duration
-    });
-
-    alert(`✓ Updated ${player.name}'s song to "${songTitle}"`);
+    if (isOverride) {
+      const currentQueue = player.songOverrideQueue || [];
+      const newEntry = { videoId: songVideoId, startTime, duration, songTitle, songThumbnail };
+      storage.updatePlayer(currentTeam.id, playerId, {
+        songOverrideQueue: [...currentQueue, newEntry]
+      });
+      const position = currentQueue.length + 1;
+      alert(`✓ Queued override #${position} for ${player.name}: "${songTitle}"`);
+    } else {
+      storage.updatePlayer(currentTeam.id, playerId, {
+        songUrl,
+        songVideoId,
+        songTitle,
+        songThumbnail,
+        startTime,
+        duration
+      });
+      alert(`✓ Updated ${player.name}'s song to "${songTitle}"`);
+    }
   };
 
   // Memoize YouTube embeds to prevent unnecessary recreation
@@ -394,6 +478,7 @@ function App() {
         key={rosterPlayer.id}
         player={rosterPlayer}
         isActive={currentPlayerIndex === index}
+        activeOverride={currentPlayerIndex === index ? (rosterPlayer.songOverrideQueue?.[0] ?? null) : null}
         onReady={handlePlayerReady}
         onEnded={handleSongEnded}
       />
@@ -431,6 +516,31 @@ function App() {
     }
   };
 
+  const handleApproveCloudOverride = async (playerId, queue) => {
+    if (!currentTeam) return;
+    const player = players.find(p => String(p.id) === String(playerId));
+    if (!player) return;
+
+    const existing = player.songOverrideQueue || [];
+    storage.updatePlayer(currentTeam.id, player.id, {
+      songOverrideQueue: [...existing, ...queue]
+    });
+
+    // Clear from KV
+    try {
+      await fetch(`${WORKER_URL}/api/pending/${currentTeam.id}/${playerId}`, { method: 'DELETE' });
+    } catch { /* ignore */ }
+
+    setPendingCloudOverrides(prev => prev.filter(p => String(p.playerId) !== String(playerId)));
+  };
+
+  const handleDismissCloudOverride = async (playerId) => {
+    try {
+      await fetch(`${WORKER_URL}/api/pending/${currentTeam.id}/${playerId}`, { method: 'DELETE' });
+    } catch { /* ignore */ }
+    setPendingCloudOverrides(prev => prev.filter(p => String(p.playerId) !== String(playerId)));
+  };
+
   const handleDismissPremiumBanner = () => {
     localStorage.setItem('premiumBannerDismissed', 'true');
     setPremiumBannerDismissed(true);
@@ -456,6 +566,16 @@ function App() {
 
 
         <div className="app-actions">
+          {pendingCloudOverrides.length > 0 && (
+            <button
+              className="btn btn-secondary btn-sm notification-btn"
+              onClick={() => setShowPendingDialog(true)}
+              title="Pending paid overrides"
+            >
+              🔔
+              <span className="notification-badge">{pendingCloudOverrides.length}</span>
+            </button>
+          )}
           <button
             className="btn btn-secondary btn-sm share-btn"
             onClick={() => setShowShareDialog(true)}
@@ -532,9 +652,16 @@ function App() {
                 <button
                   className="btn btn-secondary"
                   onClick={() => setShowImportUpdateDialog(true)}
-                  title="Import song update from parent"
+                  title="Import permanent song update from parent"
                 >
                   📲 Import Update
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowImportOverrideDialog(true)}
+                  title="Import one at-bat override from parent"
+                >
+                  🎵 Import Override
                 </button>
                 <button
                   className="btn btn-primary"
@@ -554,6 +681,10 @@ function App() {
                 onReorder={handleReorderPlayers}
                 onPlayPlayer={handlePlayPlayer}
                 onShare={handleSharePlayer}
+                onCancelOverride={handleCancelOverride}
+                pendingCloudOverrides={pendingCloudOverrides}
+                onApproveCloudOverride={handleApproveCloudOverride}
+                onDismissCloudOverride={handleDismissCloudOverride}
               />
             </>
           )}
@@ -595,6 +726,25 @@ function App() {
             setImportUpdateCode('');
           }}
           initialCode={importUpdateCode}
+        />
+      )}
+
+      {showImportOverrideDialog && (
+        <ImportUpdateDialog
+          players={players}
+          onImport={handleSongUpdate}
+          onClose={() => setShowImportOverrideDialog(false)}
+          mode="override"
+        />
+      )}
+
+      {showPendingDialog && (
+        <PendingOverridesDialog
+          pending={pendingCloudOverrides}
+          players={players}
+          onApprove={handleApproveCloudOverride}
+          onDismiss={handleDismissCloudOverride}
+          onClose={() => setShowPendingDialog(false)}
         />
       )}
 

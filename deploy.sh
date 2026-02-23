@@ -10,8 +10,10 @@ npm run build
 
 echo "📦 Deploying to main branch..."
 
+# Capture source directory before any cd
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Clone main branch to temp directory
-# Use Windows TEMP directory for compatibility
 TEMP_DIR="${TEMP:-/tmp}/dugoutdj-deploy-$(date +%s)"
 git clone -b main https://github.com/dugoutdj/dugoutdj.github.io.git "$TEMP_DIR"
 
@@ -20,7 +22,6 @@ cd "$TEMP_DIR"
 find . -maxdepth 1 ! -name '.git' ! -name 'CNAME' ! -name '.' -exec rm -rf {} + 2>/dev/null || true
 
 # Copy built files
-SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 cp -r "$SOURCE_DIR/dist/"* .
 
 # Check if there are changes

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { extractVideoId, fetchVideoInfo } from '../utils/youtube';
-import { generateUpdateCode, generateUpdateCodeUrl } from '../utils/updateCode';
+import { generateUpdateCode, generateOverrideCode, generateUpdateCodeUrl } from '../utils/updateCode';
+import { WORKER_URL } from '../constants/worker';
 import { SUGGESTED_SONGS } from '../constants/suggestedSongs';
 import './ParentSongForm.css';
 
@@ -18,10 +19,15 @@ export default function ParentSongForm() {
   const [startTime, setStartTime] = useState(0);
   const [duration, setDuration] = useState(20);
   const [updateCode, setUpdateCode] = useState('');
+  const [isOverrideCode, setIsOverrideCode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [paidLoading, setPaidLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const stripeSuccess = searchParams.get('success') === '1';
+  const stripeCancelled = searchParams.get('cancelled') === '1';
 
   // Validate required parameters
   if (!playerId || !playerName) {
@@ -99,17 +105,15 @@ export default function ParentSongForm() {
     }
   };
 
-  const handleGenerateCode = () => {
+  const handleGenerateCode = (isOverride = false) => {
     if (!selectedSong) return;
 
-    const code = generateUpdateCode(
-      playerId,
-      selectedSong.videoId,
-      startTime,
-      duration
-    );
+    const code = isOverride
+      ? generateOverrideCode(playerId, selectedSong.videoId, startTime, duration)
+      : generateUpdateCode(playerId, selectedSong.videoId, startTime, duration);
 
     setUpdateCode(code);
+    setIsOverrideCode(isOverride);
   };
 
   const handleCopyCode = () => {
@@ -119,8 +123,45 @@ export default function ParentSongForm() {
     });
   };
 
+  const handlePaidOverride = async () => {
+    if (!selectedSong || !teamId) return;
+    setPaidLoading(true);
+    setError('');
+
+    try {
+      const successUrl = `${window.location.origin}/#/parent?pid=${playerId}&pn=${encodeURIComponent(playerName)}&tid=${teamId}&success=1`;
+      const cancelUrl = `${window.location.origin}/#/parent?pid=${playerId}&pn=${encodeURIComponent(playerName)}&tid=${teamId}&cancelled=1`;
+
+      const res = await fetch(`${WORKER_URL}/api/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId,
+          playerId,
+          playerName,
+          videoId: selectedSong.videoId,
+          startTime,
+          duration,
+          songTitle: selectedSong.title,
+          songThumbnail: selectedSong.thumbnail,
+          successUrl,
+          cancelUrl,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create checkout');
+
+      window.location.href = data.checkoutUrl;
+    } catch (err) {
+      setError('Payment setup failed: ' + err.message);
+      setPaidLoading(false);
+    }
+  };
+
   const handleReset = () => {
     setUpdateCode('');
+    setIsOverrideCode(false);
     setSelectedSong(null);
     setYoutubeUrl('');
     setSelectedSuggestion('');
@@ -136,6 +177,18 @@ export default function ParentSongForm() {
         <h2>Choose Walk-up Song</h2>
         <p className="player-name-display">for {playerName}</p>
       </div>
+
+      {stripeSuccess && (
+        <div className="stripe-banner stripe-banner-success">
+          ✓ Payment received! The team manager will be notified to approve your song for {playerName}'s next at-bat.
+        </div>
+      )}
+
+      {stripeCancelled && (
+        <div className="stripe-banner stripe-banner-cancelled">
+          Payment cancelled. You can still send a free code below.
+        </div>
+      )}
 
       <div className="parent-form-content">
         {!updateCode ? (
@@ -239,19 +292,46 @@ export default function ParentSongForm() {
                   />
                 </div>
 
-                <button
-                  className="btn btn-primary btn-lg"
-                  onClick={handleGenerateCode}
-                >
-                  Generate Update Code
-                </button>
+                <div className="generate-options">
+                  <button
+                    className="generate-option-btn generate-option-permanent"
+                    onClick={() => handleGenerateCode(false)}
+                  >
+                    <div className="option-title">Permanent Update</div>
+                    <div className="option-desc">Updates song forever — text code to manager</div>
+                  </button>
+                  <button
+                    className="generate-option-btn generate-option-override"
+                    onClick={() => handleGenerateCode(true)}
+                  >
+                    <div className="option-title">One At-Bat Override</div>
+                    <div className="option-desc">Plays once — text code to manager</div>
+                  </button>
+                </div>
+
+                {teamId && (
+                  <button
+                    className="generate-option-btn generate-option-paid"
+                    onClick={handlePaidOverride}
+                    disabled={paidLoading}
+                  >
+                    <div className="option-title">
+                      {paidLoading ? 'Redirecting...' : 'Auto-Deliver Override — $5'}
+                    </div>
+                    <div className="option-desc">One at-bat · Notifies manager automatically</div>
+                  </button>
+                )}
               </>
             )}
           </>
         ) : (
           <div className="code-generated">
             <div className="success-icon">✓</div>
-            <h3>Update Code Generated!</h3>
+            <h3>{isOverrideCode ? 'Override Code Generated!' : 'Update Code Generated!'}</h3>
+
+            <div className={`code-type-badge ${isOverrideCode ? 'code-type-override' : 'code-type-permanent'}`}>
+              {isOverrideCode ? '🎵 One At-Bat Override' : '🔄 Permanent Update'}
+            </div>
 
             {!showQR ? (
               <>
@@ -274,8 +354,17 @@ export default function ParentSongForm() {
                 </button>
 
                 <div className="instructions">
-                  <p>Copy this code and send it to your team manager, or show them the QR code.</p>
-                  <p className="note">They will use it to update {playerName}'s song.</p>
+                  {isOverrideCode ? (
+                    <>
+                      <p>Copy this code and send it to your team manager.</p>
+                      <p className="note">This override will play once for {playerName}'s next at-bat, then revert to their original song.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p>Copy this code and send it to your team manager, or show them the QR code.</p>
+                      <p className="note">They will use it to permanently update {playerName}'s song.</p>
+                    </>
+                  )}
                 </div>
               </>
             ) : (
@@ -288,7 +377,7 @@ export default function ParentSongForm() {
                     includeMargin={true}
                   />
                   <p className="qr-instructions">
-                    Have your team manager scan this QR code to automatically open the app with the update code
+                    Have your team manager scan this QR code to automatically open the app with the {isOverrideCode ? 'override' : 'update'} code
                   </p>
                 </div>
 
@@ -300,7 +389,7 @@ export default function ParentSongForm() {
                 </button>
 
                 <div className="instructions">
-                  <p className="note">Scanning opens Dugout DJ with the update code ready to import</p>
+                  <p className="note">Scanning opens Dugout DJ with the {isOverrideCode ? 'override' : 'update'} code ready to import</p>
                 </div>
               </>
             )}

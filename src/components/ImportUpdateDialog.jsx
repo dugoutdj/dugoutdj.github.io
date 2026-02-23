@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { parseUpdateCode } from '../utils/updateCode';
+import { parseUpdateCode, parseOverrideCode } from '../utils/updateCode';
 import { fetchVideoInfo } from '../utils/youtube';
 import './ImportUpdateDialog.css';
 
-export default function ImportUpdateDialog({ players, onImport, onClose, initialCode = '' }) {
+export default function ImportUpdateDialog({ players, onImport, onClose, initialCode = '', mode = 'update' }) {
   const [code, setCode] = useState(initialCode);
   const [parsedData, setParsedData] = useState(null);
+  const [isOverride, setIsOverride] = useState(false);
   const [songMetadata, setSongMetadata] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,15 +15,27 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
     if (!code) {
       setParsedData(null);
       setSongMetadata(null);
+      setIsOverride(false);
       setError('');
       return;
     }
 
-    const parsed = parseUpdateCode(code);
+    // Try permanent update code first, then override code
+    let parsed = parseUpdateCode(code);
+    let detectedOverride = false;
+
+    if (!parsed) {
+      parsed = parseOverrideCode(code);
+      if (parsed) {
+        detectedOverride = true;
+      }
+    }
+
     if (!parsed) {
       setError('Invalid update code format');
       setParsedData(null);
       setSongMetadata(null);
+      setIsOverride(false);
       return;
     }
 
@@ -32,10 +45,12 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
       setError('Player not found. This code may be for a different team.');
       setParsedData(null);
       setSongMetadata(null);
+      setIsOverride(false);
       return;
     }
 
     setParsedData({ ...parsed, playerName: player.name });
+    setIsOverride(detectedOverride);
     setError('');
 
     // Fetch song metadata
@@ -62,18 +77,35 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
       songThumbnail: songMetadata?.thumbnail || '',
       songUrl: `https://www.youtube.com/watch?v=${parsedData.videoId}`,
       startTime: parsedData.startTime,
-      duration: parsedData.duration
+      duration: parsedData.duration,
+      isOverride
     };
 
     onImport(updateData);
     onClose();
   };
 
+  const isOverrideMode = mode === 'override';
+  const placeholder = isOverrideMode
+    ? 'DJUOA:123456:dQw4w9WgXcQ:15:20'
+    : 'DJU:123456:dQw4w9WgXcQ:15:20';
+  const hintText = isOverrideMode
+    ? 'Get this override code from the parent via text or email'
+    : 'Get this code from the parent via text or email';
+
+  const dialogTitle = isOverride
+    ? 'Import One At-Bat Override'
+    : isOverrideMode
+      ? 'Import Override Code'
+      : 'Import Song Update';
+
+  const confirmLabel = isOverride ? '✓ Apply Override' : '✓ Confirm Update';
+
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog import-update-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-header">
-          <h3>Import Song Update</h3>
+          <h3>{dialogTitle}</h3>
           <button className="dialog-close" onClick={onClose}>×</button>
         </div>
 
@@ -84,12 +116,12 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
               id="update-code"
               type="text"
               className="form-control"
-              placeholder="DJU:123456:dQw4w9WgXcQ:15:20"
+              placeholder={placeholder}
               value={code}
               onChange={(e) => setCode(e.target.value)}
               autoFocus
             />
-            <p className="field-hint">Get this code from the parent via text or email</p>
+            <p className="field-hint">{hintText}</p>
           </div>
 
           {error && (
@@ -106,7 +138,12 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
 
           {parsedData && !error && songMetadata && (
             <div className="update-preview">
-              <h4>Preview Update</h4>
+              <div className="preview-header">
+                <h4>Preview Update</h4>
+                <span className={`update-type-badge ${isOverride ? 'badge-override' : 'badge-permanent'}`}>
+                  {isOverride ? '🎵 One At-Bat Override' : '🔄 Permanent Update'}
+                </span>
+              </div>
 
               <div className="preview-player">
                 <strong>Player:</strong> {parsedData.playerName}
@@ -125,6 +162,11 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
                   <div className="preview-song-time">
                     Start: {parsedData.startTime}s, Duration: {parsedData.duration}s
                   </div>
+                  {isOverride && (
+                    <div className="preview-override-note">
+                      Plays once, then reverts to permanent song
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -133,7 +175,7 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
                   Cancel
                 </button>
                 <button className="btn btn-primary" onClick={handleImport}>
-                  ✓ Confirm Update
+                  {confirmLabel}
                 </button>
               </div>
             </div>
@@ -143,10 +185,10 @@ export default function ImportUpdateDialog({ players, onImport, onClose, initial
             <div className="import-help">
               <p><strong>How to use:</strong></p>
               <ol>
-                <li>Ask the parent to send you the update code</li>
+                <li>Ask the parent to send you the {isOverrideMode ? 'override' : 'update'} code</li>
                 <li>Copy the code from their text/email</li>
                 <li>Paste it in the field above</li>
-                <li>Preview the update and confirm</li>
+                <li>Preview the {isOverrideMode ? 'override' : 'update'} and confirm</li>
               </ol>
             </div>
           )}

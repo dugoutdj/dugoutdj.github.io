@@ -5,6 +5,7 @@ import './PlayerYouTubeEmbed.css';
 export default function PlayerYouTubeEmbed({
   player,
   isActive,
+  activeOverride,
   onReady,
   onEnded
 }) {
@@ -73,7 +74,10 @@ export default function PlayerYouTubeEmbed({
   useEffect(() => {
     if (!ytPlayer || !isActive) return;
 
-    const endTime = (player.startTime || 0) + (player.duration || 30);
+    const endTime = activeOverride
+      ? (activeOverride.startTime || 0) + (activeOverride.duration || 30)
+      : (player.startTime || 0) + (player.duration || 30);
+
     const interval = setInterval(() => {
       const currentTime = ytPlayer.getCurrentTime?.();
       if (currentTime && currentTime >= endTime) {
@@ -83,7 +87,7 @@ export default function PlayerYouTubeEmbed({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [ytPlayer, isActive, player.startTime, player.duration, player.id, onEnded]);
+  }, [ytPlayer, isActive, player.startTime, player.duration, player.id, onEnded, activeOverride]);
 
   return (
     <div

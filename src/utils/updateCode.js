@@ -1,6 +1,7 @@
 // Utility functions for encoding/decoding player song update codes
 
 const CODE_PREFIX = 'DJU'; // Dugout DJ Update
+const OVERRIDE_PREFIX = 'DJUOA'; // Dugout DJ Update One At-bat
 
 /**
  * Generate an update code from player and song data
@@ -44,6 +45,63 @@ export function parseUpdateCode(code) {
   }
 
   // Validate start time and duration (should be numbers)
+  const startTimeNum = parseInt(startTime, 10);
+  const durationNum = parseInt(duration, 10);
+
+  if (isNaN(startTimeNum) || isNaN(durationNum)) {
+    return null;
+  }
+
+  if (startTimeNum < 0 || durationNum <= 0) {
+    return null;
+  }
+
+  return {
+    playerId: playerIdNum,
+    videoId,
+    startTime: startTimeNum,
+    duration: durationNum
+  };
+}
+
+/**
+ * Generate a one at-bat override code
+ * Format: DJUOA:playerID:videoID:startTime:duration
+ */
+export function generateOverrideCode(playerId, videoId, startTime, duration) {
+  return `${OVERRIDE_PREFIX}:${playerId}:${videoId}:${startTime}:${duration}`;
+}
+
+/**
+ * Parse a one at-bat override code into its components
+ * Returns null if code is invalid or not an override code
+ */
+export function parseOverrideCode(code) {
+  if (!code || typeof code !== 'string') {
+    return null;
+  }
+
+  const parts = code.trim().split(':');
+
+  if (parts.length !== 5) {
+    return null;
+  }
+
+  const [prefix, playerId, videoId, startTime, duration] = parts;
+
+  if (prefix !== OVERRIDE_PREFIX) {
+    return null;
+  }
+
+  const playerIdNum = parseInt(playerId, 10);
+  if (isNaN(playerIdNum)) {
+    return null;
+  }
+
+  if (!videoId || videoId.length === 0) {
+    return null;
+  }
+
   const startTimeNum = parseInt(startTime, 10);
   const durationNum = parseInt(duration, 10);
 

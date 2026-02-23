@@ -30,9 +30,44 @@
   border-top: 2px solid var(--border-color);
 }
 
-.update-preview h4 {
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.preview-header h4 {
+  margin: 0;
   color: var(--text-primary);
+}
+
+.update-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-permanent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge-override {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.preview-override-note {
+  font-size: 0.8125rem;
+  color: #92400e;
+  font-style: italic;
+  margin-top: 0.25rem;
 }
 
 .preview-player {

@@ -1,0 +1,10 @@
+name = "dugout-dj-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "OVERRIDES_KV"
+id = "a6f0ffad472c4072a1271aaaad007328"
+
+[vars]
+STRIPE_PRICE_ID = "price_1T44p5GiGfaU9rkI67pzg9Gh"

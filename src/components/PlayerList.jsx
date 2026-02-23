@@ -10,7 +10,11 @@ export default function PlayerList({
   onToggleDisabled,
   onReorder,
   onPlayPlayer,
-  onShare
+  onShare,
+  onCancelOverride,
+  pendingCloudOverrides,
+  onApproveCloudOverride,
+  onDismissCloudOverride
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
@@ -102,6 +106,31 @@ export default function PlayerList({
           </div>
 
           <div className="col-song">
+            {(() => {
+              const pending = pendingCloudOverrides?.find(p => String(p.playerId) === String(player.id));
+              return pending ? (
+                <div className="pending-cloud-badge" onClick={e => e.stopPropagation()}>
+                  <div className="pending-cloud-header">
+                    🔔 Paid override: <strong>{pending.queue[0]?.songTitle || 'Unknown song'}</strong>
+                    {pending.queue.length > 1 && <span> (+{pending.queue.length - 1} more)</span>}
+                  </div>
+                  <div className="pending-cloud-actions">
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onDismissCloudOverride(player.id)}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => onApproveCloudOverride(player.id, pending.queue)}
+                    >
+                      ✓ Approve
+                    </button>
+                  </div>
+                </div>
+              ) : null;
+            })()}
             {player.songVideoId ? (
               <>
                 {/* Always render YouTube player so it initializes, but hide when not selected */}
@@ -110,23 +139,48 @@ export default function PlayerList({
                 </div>
                 {/* Show song info when not selected */}
                 {currentPlayerIndex !== index && (
-                  <div className="song-info">
-                    {player.songThumbnail && (
-                      <img
-                        src={player.songThumbnail}
-                        alt={player.songTitle}
-                        className="song-thumbnail-small"
-                      />
-                    )}
-                    <div className="song-details">
-                      <div className="song-title">{player.songTitle || 'Unknown Song'}</div>
-                      {player.startTime !== undefined && player.duration && (
-                        <div className="song-time">
-                          {Math.floor(player.startTime)}s - {Math.floor(player.startTime + player.duration)}s
-                        </div>
+                  <>
+                    <div className="song-info">
+                      {player.songThumbnail && (
+                        <img
+                          src={player.songThumbnail}
+                          alt={player.songTitle}
+                          className="song-thumbnail-small"
+                        />
                       )}
+                      <div className="song-details">
+                        <div className="song-title">{player.songTitle || 'Unknown Song'}</div>
+                        {player.startTime !== undefined && player.duration && (
+                          <div className="song-time">
+                            {Math.floor(player.startTime)}s - {Math.floor(player.startTime + player.duration)}s
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                    {player.songOverrideQueue?.length > 0 && onCancelOverride && (
+                      <div className="override-badge">
+                        <span className="override-badge-label">🎵 Next at-bat:</span>
+                        <span className="override-badge-title">
+                          {player.songOverrideQueue[0].songTitle || 'Override'}
+                        </span>
+                        {player.songOverrideQueue.length > 1 && (
+                          <span className="override-queue-count">
+                            +{player.songOverrideQueue.length - 1} more
+                          </span>
+                        )}
+                        <button
+                          className="override-cancel-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCancelOverride(player.id);
+                          }}
+                          title="Cancel all queued overrides"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             ) : (
