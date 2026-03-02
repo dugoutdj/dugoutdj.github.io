@@ -1,6 +1,6 @@
 // Dugout DJ Service Worker
 // Bump APP_VERSION when deploying breaking changes to force cache refresh.
-const APP_VERSION = 'v5';
+const APP_VERSION = 'v6';
 const APP_CACHE = `dugoutdj-app-${APP_VERSION}`;
 const IMAGE_CACHE = 'dugoutdj-images-v1';
 
