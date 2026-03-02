@@ -1,9 +1,8 @@
 // Dugout DJ Service Worker
 // Bump APP_VERSION when deploying breaking changes to force cache refresh.
-const APP_VERSION = 'v4';
+const APP_VERSION = 'v5';
 const APP_CACHE = `dugoutdj-app-${APP_VERSION}`;
 const IMAGE_CACHE = 'dugoutdj-images-v1';
-const IMAGE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
 // On install: pre-cache the minimal app shell (index.html + favicon).
 // Hashed /assets/ files are cached on first access instead.
@@ -79,28 +78,16 @@ async function networkFirst(cacheName, request) {
   }
 }
 
-// Image cache first with 7-day expiry stored in response headers
+// Image cache first — serve from cache, fetch and store on miss
 async function imageCacheFirst(request) {
   const cached = await caches.match(request);
-  if (cached) {
-    const cachedAt = cached.headers.get('x-cached-at');
-    if (cachedAt && Date.now() - Number(cachedAt) < IMAGE_MAX_AGE) {
-      return cached;
-    }
-  }
+  if (cached) return cached;
   try {
     const response = await fetch(request);
-    if (response.ok || response.status === 0) {
-      // Clone and add a timestamp header so we can expire old entries
-      const headers = new Headers(response.headers);
-      headers.set('x-cached-at', String(Date.now()));
-      const stamped = new Response(await response.blob(), { status: response.status, headers });
-      const cache = await caches.open(IMAGE_CACHE);
-      cache.put(request, stamped);
-      return stamped;
-    }
+    const cache = await caches.open(IMAGE_CACHE);
+    cache.put(request, response.clone());
     return response;
   } catch {
-    return cached || new Response('', { status: 408 });
+    return new Response('', { status: 408 });
   }
 }
