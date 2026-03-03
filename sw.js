@@ -1,6 +1,6 @@
 // Dugout DJ Service Worker
 // Bump APP_VERSION when deploying breaking changes to force cache refresh.
-const APP_VERSION = 'v6';
+const APP_VERSION = 'v7';
 const APP_CACHE = `dugoutdj-app-${APP_VERSION}`;
 const IMAGE_CACHE = 'dugoutdj-images-v1';
 
@@ -46,9 +46,11 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // index.html and other same-origin files — network first, fall back to cache
+  // index.html and other same-origin files — stale-while-revalidate:
+  // serve cached version instantly, refresh cache in background.
+  // Better than networkFirst on slow/flaky cellular connections.
   if (url.origin === self.location.origin) {
-    event.respondWith(networkFirst(APP_CACHE, request));
+    event.respondWith(staleWhileRevalidate(APP_CACHE, request));
     return;
   }
 });
@@ -65,17 +67,22 @@ async function cacheFirst(cacheName, request) {
   return response;
 }
 
-// Network first: try network, fall back to cache on failure
-async function networkFirst(cacheName, request) {
+// Stale-while-revalidate: return cached response immediately if available,
+// then fetch from network in background to keep cache fresh.
+// Falls back to waiting for network if nothing is cached yet (first visit).
+async function staleWhileRevalidate(cacheName, request) {
   const cache = await caches.open(cacheName);
-  try {
-    const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
-    return response;
-  } catch {
-    const cached = await cache.match(request);
-    return cached || new Response('Offline', { status: 503 });
-  }
+  const cached = await cache.match(request);
+
+  const networkFetch = fetch(request)
+    .then(response => {
+      if (response.ok) cache.put(request, response.clone());
+      return response;
+    })
+    .catch(() => null);
+
+  // Serve cache immediately; if nothing cached yet, wait for network
+  return cached ?? networkFetch;
 }
 
 // Image cache first — serve from cache, fetch and store on miss
