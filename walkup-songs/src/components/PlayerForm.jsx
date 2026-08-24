@@ -172,15 +172,19 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     setFormData((prev) => ({ ...prev, startTime: start, duration }));
   };
 
-  // Invisible overlay handles at the window edges. They carry the resize drag
-  // themselves (pointer capture on window), so no native thumb hit-testing is
-  // involved — the bars are gone but dragging works everywhere.
+  // Visible grab handles at the window edges carry the resize drag.
+  // setPointerCapture ensures touch events keep flowing even when the
+  // user's finger slides off the narrow handle — critical on mobile.
   const handleDragStart = (which) => (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const wrapEl = e.currentTarget.parentElement;
+    const el = e.currentTarget;
+    const wrapEl = el.parentElement;
     const rect = wrapEl.getBoundingClientRect();
     draggingRef.current = true;
+    // Capture the pointer on this element so touch-move keeps firing
+    // even if the finger drifts outside the handle's box.
+    try { el.setPointerCapture(e.pointerId); } catch { /* noop */ }
     const move = (ev) => {
       const pct = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
       const secs = Math.round(pct * PREVIEW_SECONDS);
