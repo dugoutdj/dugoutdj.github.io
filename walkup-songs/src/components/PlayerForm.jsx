@@ -64,27 +64,36 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     };
   }, [onCancel]);
 
-  // Debounced live search against Apple's catalog.
+  // Debounced live search against the catalog. The 700ms debounce keeps
+  // fast typing to a single request (per-keystroke bursts tripped Apple's
+  // rate limiter on the server), and 2+ chars avoids useless one-letter
+  // searches. Results from a superseded query are dropped.
+  const latestQueryRef = useRef('');
   useEffect(() => {
-    if (!appleQuery.trim()) {
+    const q = appleQuery.trim();
+    if (q.length < 2) {
+      latestQueryRef.current = '';
       setAppleResults([]);
       setAppleError(null);
       return;
     }
+    latestQueryRef.current = q;
 
     const timer = setTimeout(async () => {
       setAppleSearching(true);
       setAppleError(null);
       try {
-        const results = await searchTracks(appleQuery);
+        const results = await searchTracks(q);
+        if (latestQueryRef.current !== q) return; // a newer query won
         setAppleResults(results);
       } catch (err) {
-        console.error('Apple search error:', err);
+        if (latestQueryRef.current !== q) return;
+        console.error('Song search error:', err);
         setAppleError(err.message || 'Search failed. Please try again.');
       } finally {
-        setAppleSearching(false);
+        if (latestQueryRef.current === q) setAppleSearching(false);
       }
-    }, 350);
+    }, 700);
 
     return () => clearTimeout(timer);
   }, [appleQuery]);
