@@ -10,11 +10,18 @@
 
 // Same-origin proxy (Cloudflare Pages Function) so mobile clients never
 // hit itunes.apple.com directly — iOS WebKit in particular fails those
-// requests from phones. Falls back to Apple's API directly when the proxy
-// isn't available (local dev / previews without Functions).
+// requests from phones. The proxy searches Apple first and falls back to
+// Deezer when Apple throttles the server IP, so the proxy itself almost
+// always returns results. Falls back to Apple's API directly when the
+// proxy isn't available (local dev / previews without Functions).
 const SEARCH_URL = '/api/search';
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
 const SEARCH_LIMIT = 8;
+
+// Client-side result cache so repeated queries never hit the network.
+const SEARCH_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const searchCache = new Map(); // term -> { at, results }
+const inflight = new Map(); // term -> Promise<results>
 
 // Strip YouTube-style video-title noise so "Artist - Song (Official Video)
 // (4K Remaster)" searches as "Artist - Song".
@@ -46,39 +53,70 @@ function mapResults(data) {
     }));
 }
 
+async function fetchProxy(term) {
+  const res = await fetch(`${SEARCH_URL}?term=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}`);
+  if (!res.ok) {
+    // Try to surface the server's actual error for diagnosis.
+    const errBody = await res.json().catch(() => ({}));
+    const detail = errBody.detail || errBody.error || `HTTP ${res.status}`;
+    throw new Error(detail);
+  }
+  const data = await res.json();
+  if (!Array.isArray(data?.results)) {
+    throw new Error('Unexpected search response');
+  }
+  return mapResults(data);
+}
+
 export async function searchTracks(query) {
   const term = cleanTitle(query);
   if (!term) return [];
 
-  // Primary: same-origin proxy. On the deployed site this benefits from
-  // edge caching and avoids iOS WebKit / Private Relay issues with
-  // itunes.apple.com.
-  try {
-    const res = await fetch(`${SEARCH_URL}?term=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data?.results)) return mapResults(data);
-    }
-    // Proxy returned non-OK — try to get a useful error message.
-    const errBody = await res.json().catch(() => ({}));
-    const detail = errBody.detail || errBody.error || `HTTP ${res.status}`;
-    throw new Error(`Search proxy: ${detail}`);
-  } catch {
-    // Proxy unavailable or blocked — fall back to Apple directly.
-    // This path works on desktop; mobile may still fail if the phone
-    // blocks itunes.apple.com.
-  }
+  const cached = searchCache.get(term);
+  if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL) return cached.results;
+  if (inflight.has(term)) return inflight.get(term);
 
-  try {
-    const direct = await fetch(
-      `${ITUNES_SEARCH_URL}?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${SEARCH_LIMIT}`
-    );
-    if (!direct.ok) {
-      throw new Error(`Apple search failed (HTTP ${direct.status}).`);
+  const run = (async () => {
+    // Primary: same-origin proxy (Apple with Deezer fallback server-side).
+    try {
+      return await fetchProxy(term);
+    } catch (err) {
+      console.warn('Search proxy failed, retrying once:', err);
     }
-    return mapResults(await direct.json());
-  } catch (directErr) {
-    throw new Error(`Apple search unavailable (${directErr.message || directErr}).`);
+
+    // One retry after a pause — covers a cold function or transient error.
+    await new Promise((r) => setTimeout(r, 1200));
+    try {
+      return await fetchProxy(term);
+    } catch (err) {
+      console.warn('Search proxy retry failed:', err);
+    }
+
+    // Last resort: Apple's API directly. Works on desktop; mobile networks
+    // are often blocked, which surfaces as "Load failed" — translate that.
+    try {
+      const direct = await fetch(
+        `${ITUNES_SEARCH_URL}?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${SEARCH_LIMIT}`
+      );
+      if (!direct.ok) {
+        throw new Error(`Apple search failed (HTTP ${direct.status}).`);
+      }
+      return mapResults(await direct.json());
+    } catch (directErr) {
+      const msg = /load failed|failed to fetch|networkerror/i.test(directErr.message || '')
+        ? 'Apple is blocking search from this network. Try again in a moment.'
+        : (directErr.message || 'Search failed');
+      throw new Error(`Search unavailable — ${msg}`);
+    }
+  })();
+
+  inflight.set(term, run);
+  try {
+    const results = await run;
+    searchCache.set(term, { at: Date.now(), results });
+    return results;
+  } finally {
+    inflight.delete(term);
   }
 }
 
