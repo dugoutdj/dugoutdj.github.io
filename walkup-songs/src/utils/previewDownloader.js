@@ -51,7 +51,9 @@ function mapResults(data) {
       trackName: r.trackName,
       artistName: r.artistName,
       collectionName: r.collectionName,
-      artworkUrl: mediaProxy(r.artworkUrl100) || null,
+      // Apple returns artworkUrl100; Deezer fallback results carry artworkUrl.
+      // Accept either so fallback results never lose their album art.
+      artworkUrl: mediaProxy(r.artworkUrl100 || r.artworkUrl) || null,
       previewUrl: mediaProxy(r.previewUrl),
       trackViewUrl: r.trackViewUrl || null
     }));
