@@ -50,6 +50,7 @@ export const useLocalStorage = () => {
     const newPlayer = {
       id: Date.now(),
       name: player.name,
+      pronounced: player.pronounced || player.name || '',
       number: player.number || '',
       songUrl: player.songUrl || '',
       songSource: player.songSource || '',

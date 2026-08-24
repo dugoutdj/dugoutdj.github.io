@@ -26,7 +26,7 @@ export async function onRequestOptions() {
   }});
 }
 
-const SONG_FIELDS = ['songTitle', 'previewUrl', 'artworkUrl', 'appleTrackId', 'startTime', 'duration', 'songSource'];
+const SONG_FIELDS = ['songTitle', 'pronounced', 'previewUrl', 'artworkUrl', 'appleTrackId', 'startTime', 'duration', 'songSource'];
 
 export async function onRequestPut(context) {
   const { request, env, params } = context;

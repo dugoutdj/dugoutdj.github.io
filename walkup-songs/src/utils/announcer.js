@@ -11,6 +11,11 @@
 //     (no key configured, quota hit, network error, or playback blocked)
 //   - always resolves — callers play the song regardless
 
+import {
+  getAnnouncement,
+  saveAnnouncement
+} from './offlineLibrary';
+
 let audioEl = null;
 const urlCache = new Map(); // normalized name -> object URL
 const pending = new Map();  // normalized name -> in-flight fetch promise
@@ -19,16 +24,36 @@ function cacheKey(name) {
   return String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+// Get the announcement audio for a name, preferring (in order): the
+// in-memory URL cache, the locally saved IndexedDB clip, then the server.
+// When fetched from the server, the clip is saved locally so it never has
+// to be regenerated or re-downloaded. Changing the pronounced name changes
+// the key, which naturally produces (and saves) a fresh clip.
 async function fetchAnnouncementUrl(name) {
   const key = cacheKey(name);
+  if (!key) return null;
   if (urlCache.has(key)) return urlCache.get(key);
   if (pending.has(key)) return pending.get(key);
 
   const p = (async () => {
+    // 1) Locally saved copy — the point of this feature: zero regeneration.
+    try {
+      const saved = await getAnnouncement(key);
+      if (saved && saved.blob && saved.blob.size) {
+        const url = URL.createObjectURL(saved.blob);
+        urlCache.set(key, url);
+        return url;
+      }
+    } catch { /* IndexedDB unavailable — fall through to server */ }
+
+    // 2) Server (KV-cached server-side too). Save the result locally.
     const res = await fetch(`/api/announce?name=${encodeURIComponent(name)}`);
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob || blob.size === 0) return null;
+    try {
+      await saveAnnouncement(key, blob);
+    } catch { /* saving is best-effort */ }
     const url = URL.createObjectURL(blob);
     urlCache.set(key, url);
     return url;

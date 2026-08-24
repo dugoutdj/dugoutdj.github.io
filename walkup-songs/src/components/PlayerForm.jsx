@@ -15,6 +15,7 @@ const MAX_START = PREVIEW_SECONDS - MIN_WINDOW;
 export default function PlayerForm({ player, onSave, onCancel, songOnly = false }) {
   const [formData, setFormData] = useState({
     name: '',
+    pronounced: '',
     number: '',
     songUrl: '',
     songSource: '', // 'apple' ('' = legacy/unset)
@@ -51,7 +52,12 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
       if (player.songSource === 'apple' && start + duration > PREVIEW_SECONDS) {
         duration = PREVIEW_SECONDS - start;
       }
-      setFormData({ ...player, startTime: start, duration });
+      setFormData({
+        ...player,
+        pronounced: player.pronounced || player.name || '',
+        startTime: start,
+        duration
+      });
     }
   }, [player]);
 
@@ -296,6 +302,20 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
             />
           </div>
         )}
+
+        <div className="form-group">
+          <label>Pronounced</label>
+          <input
+            type="text"
+            value={formData.pronounced || ''}
+            onChange={(e) => setFormData({ ...formData, pronounced: e.target.value })}
+            className="input"
+            placeholder="How the announcer says the name"
+          />
+          <small className="form-hint">
+            Used for "Now batting, …!" — defaults to the player name, edit only if the name needs phonetic help.
+          </small>
+        </div>
 
         {!songOnly && (
           <div className="form-group">

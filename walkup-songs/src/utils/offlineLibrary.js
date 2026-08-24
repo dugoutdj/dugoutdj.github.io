@@ -7,8 +7,9 @@
 // localStorage is capped at ~5 MB and only stores strings.
 
 const DB_NAME = 'dugoutdj-offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = 'songs';
+const ANNOUNCE_STORE = 'announcements';
 
 let dbPromise = null;
 
@@ -27,6 +28,10 @@ function openDB() {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: 'videoId' });
+      }
+      // v2: store for locally saved announcer clips ("Now batting, ...").
+      if (!db.objectStoreNames.contains(ANNOUNCE_STORE)) {
+        db.createObjectStore(ANNOUNCE_STORE, { keyPath: 'name' });
       }
     };
 
@@ -145,4 +150,36 @@ export async function clearLibrary() {
 export async function getUsageBytes() {
   const songs = await listSongs();
   return songs.reduce((sum, song) => sum + (song.size || 0), 0);
+}
+
+// --- Announcer clips (locally saved "Now batting, ..." audio) -------------
+// Stored in their own object store keyed by the pronounced name, so they
+// never show up in the offline song library stats and are never regenerated
+// after the first fetch. Changing a player's pronounced name changes the
+// key, which naturally triggers a fresh generation.
+
+export async function saveAnnouncement(name, blob) {
+  const db = await openDB();
+  const tx = db.transaction(ANNOUNCE_STORE, 'readwrite');
+  tx.objectStore(ANNOUNCE_STORE).put({
+    name,
+    blob,
+    size: blob.size || 0,
+    savedAt: Date.now()
+  });
+  await transactionDone(tx);
+}
+
+export async function getAnnouncement(name) {
+  const db = await openDB();
+  const tx = db.transaction(ANNOUNCE_STORE, 'readonly');
+  const record = await requestToPromise(tx.objectStore(ANNOUNCE_STORE).get(name));
+  return record || null;
+}
+
+export async function removeAnnouncement(name) {
+  const db = await openDB();
+  const tx = db.transaction(ANNOUNCE_STORE, 'readwrite');
+  tx.objectStore(ANNOUNCE_STORE).delete(name);
+  await transactionDone(tx);
 }

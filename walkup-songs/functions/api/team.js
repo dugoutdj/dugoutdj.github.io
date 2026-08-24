@@ -31,6 +31,7 @@ function sanitizePlayer(p) {
   return {
     id: String(p.id ?? ''),
     name: String(p.name ?? ''),
+    pronounced: String(p.pronounced ?? p.name ?? ''),
     number: String(p.number ?? ''),
     songTitle: String(p.songTitle ?? ''),
     previewUrl: String(p.previewUrl ?? ''),
