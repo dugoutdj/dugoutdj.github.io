@@ -50,25 +50,36 @@ export async function searchTracks(query) {
   const term = cleanTitle(query);
   if (!term) return [];
 
-  // Primary: same-origin proxy. On the deployed site this always works and
-  // benefits from edge caching.
+  // Primary: same-origin proxy. On the deployed site this benefits from
+  // edge caching and avoids iOS WebKit / Private Relay issues with
+  // itunes.apple.com.
   try {
     const res = await fetch(`${SEARCH_URL}?term=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}`);
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data?.results)) return mapResults(data);
     }
+    // Proxy returned non-OK — try to get a useful error message.
+    const errBody = await res.json().catch(() => ({}));
+    const detail = errBody.detail || errBody.error || `HTTP ${res.status}`;
+    throw new Error(`Search proxy: ${detail}`);
   } catch {
-    // Proxy unavailable — fall through to Apple directly.
+    // Proxy unavailable or blocked — fall back to Apple directly.
+    // This path works on desktop; mobile may still fail if the phone
+    // blocks itunes.apple.com.
   }
 
-  const direct = await fetch(
-    `${ITUNES_SEARCH_URL}?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${SEARCH_LIMIT}`
-  );
-  if (!direct.ok) {
-    throw new Error(`Apple's search API failed (HTTP ${direct.status}).`);
+  try {
+    const direct = await fetch(
+      `${ITUNES_SEARCH_URL}?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${SEARCH_LIMIT}`
+    );
+    if (!direct.ok) {
+      throw new Error(`Apple search failed (HTTP ${direct.status}).`);
+    }
+    return mapResults(await direct.json());
+  } catch (directErr) {
+    throw new Error(`Apple search unavailable (${directErr.message || directErr}).`);
   }
-  return mapResults(await direct.json());
 }
 
 // Score iTunes results against the cleaned title: count matching significant
