@@ -201,6 +201,41 @@
   max-width: 100%;
 }
 
+/* Close button on the share-status box. Dismissing only hides the box;
+   the link stays live for parents and returns on the next Share click. */
+.share-status {
+  position: relative;
+}
+
+.share-dismiss-btn {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #1e40af;
+  font-size: 0.875rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.share-dismiss-btn:hover {
+  opacity: 1;
+  background: rgba(30, 64, 175, 0.1);
+}
+
+/* Room for the close button so it never overlaps the link text. */
+.share-status .share-link {
+  margin-right: 1.5rem;
+}
+
 .pending-updates {
   display: flex;
   flex-wrap: wrap;

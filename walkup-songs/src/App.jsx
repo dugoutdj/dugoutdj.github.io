@@ -53,6 +53,7 @@ function App() {
   const [sharedTeamId, setSharedTeamId] = useState(null); // coach's own shared id
   const [shareLink, setShareLink] = useState(null);       // generated URL for the coach
   const [shareStatus, setShareStatus] = useState('');     // coach-facing status text
+  const [shareDismissed, setShareDismissed] = useState(false); // hide the status box (link stays live)
   const [pendingUpdates, setPendingUpdates] = useState({}); // playerId -> remote player data
 
   // Parent mode: URL is /team/<id> — render the simple parent view instead.
@@ -79,6 +80,7 @@ function App() {
     setShareLink(storedId ? shareUrlForTeam(storedId) : null);
     if (storedId && !shareStatus) {
       setShareStatus('Your team link is ready — send it to parents:');
+      setShareDismissed(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTeam?.id]);
@@ -307,6 +309,8 @@ function App() {
   // share with parents.
   const handleShareWithParents = async () => {
     if (!currentTeam || !players.length) return;
+    // Re-clicking the button brings the status box back.
+    setShareDismissed(false);
     setShareStatus('Creating link…');
     try {
       const payload = {
@@ -538,7 +542,7 @@ function App() {
                   </button>
                 </div>
 
-              {shareStatus && (
+              {shareStatus && !shareDismissed && (
                 <div className="share-status">
                   <span>{shareStatus}</span>
                   {shareLink && (
@@ -556,6 +560,14 @@ function App() {
                   {shareLink && (
                     <code className="share-link">{shareLink}</code>
                   )}
+                  <button
+                    className="share-dismiss-btn"
+                    onClick={() => setShareDismissed(true)}
+                    title="Hide this box — your link stays active for parents"
+                    aria-label="Dismiss share link box"
+                  >
+                    ✕
+                  </button>
                 </div>
               )}
 
