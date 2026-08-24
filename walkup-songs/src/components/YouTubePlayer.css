@@ -1,0 +1,14 @@
+.youtube-player-container {
+  position: fixed;
+  bottom: -100px;
+  left: -100px;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  z-index: -1;
+}
+
+#youtube-player {
+  width: 0;
+  height: 0;
+}

@@ -1,0 +1,306 @@
+/* Modal overlay — the Add/Edit form floats above the player list. */
+.player-form-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.player-form-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(15 23 42 / 0.5);
+}
+
+.player-form-dialog {
+  position: relative;
+  background: var(--bg-primary);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dialog-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.dialog-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.player-form {
+  padding: 1.5rem;
+}
+
+.song-input-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.song-input-group .input {
+  flex: 1;
+}
+
+.video-preview {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-tertiary);
+  border-radius: 0.25rem;
+}
+
+.video-preview small {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.youtube-premium-tip {
+  background: rgb(37 99 235 / 0.1);
+  border-left: 3px solid var(--primary-color);
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.youtube-premium-tip strong {
+  color: var(--primary-color);
+}
+
+.youtube-premium-tip a {
+  color: var(--primary-color);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.youtube-premium-tip a:hover {
+  opacity: 0.8;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  /* Bottom sheet on phones — the dialog scrolls, header and actions stay put. */
+  .player-form-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .player-form-dialog {
+    max-width: 100%;
+    max-height: 92vh;
+    max-height: 92dvh;
+    border-radius: 1rem 1rem 0 0;
+  }
+
+  .player-form {
+    padding-bottom: 0;
+  }
+
+  .player-form-dialog .form-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+    padding: 0.875rem 1.5rem;
+    margin-top: 0;
+    z-index: 1;
+  }
+
+  .song-input-group {
+    flex-direction: column;
+  }
+}
+
+/* Apple Music search */
+.apple-search-box {
+  position: relative;
+}
+
+.apple-searching {
+  position: absolute;
+  right: 0.625rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.search-error-text {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--danger-color);
+  font-size: 0.75rem;
+}
+
+.apple-results {
+  margin-top: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+}
+
+.apple-result-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.apple-result-item:last-child {
+  border-bottom: none;
+}
+
+.apple-result-item:hover {
+  background: var(--bg-secondary, #f1f5f9);
+}
+
+.apple-result-item img {
+  width: 44px;
+  height: 44px;
+  border-radius: 0.375rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.apple-result-item .result-info {
+  min-width: 0;
+}
+
+.apple-result-item .result-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apple-result-item .result-channel {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youtube-advanced {
+  margin-top: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.youtube-advanced summary {
+  cursor: pointer;
+  margin-bottom: 0.375rem;
+}
+
+/* 10-second walk-up window selector over the 30s Apple preview */
+.preview-window-group {
+  margin-top: 0.75rem;
+}
+
+.preview-window-slider-wrap {
+  position: relative;
+  height: 1.75rem;
+  margin: 0.25rem 0;
+}
+
+.preview-window-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
+  width: 100%;
+  height: 0.75rem;
+  border-radius: 999px;
+  outline: none;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.preview-window-slider-start {
+  z-index: 1;
+}
+
+.preview-window-slider-end {
+  z-index: 2;
+}
+
+/* Thumbs are fully invisible — resizing is handled by the overlay handle
+   divs (below), so no visible bars at the window edges. */
+.preview-window-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.875rem;
+  height: 1.5rem;
+  border-radius: 0.1875rem;
+  background: transparent;
+  pointer-events: none;
+}
+
+.preview-window-slider::-moz-range-thumb {
+  width: 0.875rem;
+  height: 1.5rem;
+  border-radius: 0.1875rem;
+  background: transparent;
+  pointer-events: none;
+}
+
+/* Invisible resize grab zones centered on the window edges. */
+.preview-window-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1rem;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 3;
+}
+
+.preview-window-length {
+  font-weight: 600;
+  color: var(--success-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-window-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
