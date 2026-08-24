@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { formatTime } from '../utils/youtube';
 import { searchTracks } from '../utils/previewDownloader';
 import { mediaProxy } from '../utils/media';
+import { playAnnouncement, stopAnnouncement } from '../utils/announcer';
 import './PlayerForm.css';
 
 // The Apple preview is 30 seconds; the walk-up window is a selectable slice
@@ -39,6 +40,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // Live preview of the selected walk-up window (played from previewUrl).
   const [previewing, setPreviewing] = useState(false);
   const audioRef = useRef(null);
+  // Live preview of the "Now batting, ...!" announcement.
+  const [announcePreviewing, setAnnouncePreviewing] = useState(false);
 
   useEffect(() => {
     if (player) {
@@ -212,6 +215,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // Stop any running preview when the form unmounts.
   useEffect(() => {
     return () => {
+      stopAnnouncement();
       const audio = audioRef.current;
       if (audio) {
         audio.pause();
@@ -235,6 +239,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
       stopPreview();
       return;
     }
+    // Don't let the song and announcement play at the same time.
+    stopAnnouncePreview();
     const start = Math.max(0, Number(formData.startTime) || 0);
     const duration = Math.max(1, Number(formData.duration) || WINDOW_SECONDS);
     const end = start + duration;
@@ -276,6 +282,27 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     setPreviewing(true);
   };
 
+  // Live-play "Now batting, <pronounced>!" so the coach/parent can hear
+  // exactly how the announcer will sound before saving.
+  const stopAnnouncePreview = () => {
+    stopAnnouncement();
+    setAnnouncePreviewing(false);
+  };
+
+  const toggleAnnouncePreview = () => {
+    if (announcePreviewing) {
+      stopAnnouncePreview();
+      return;
+    }
+    const name = (formData.pronounced || formData.name || '').trim();
+    if (!name) return;
+    // Don't let the song and announcement play at the same time.
+    stopPreview();
+    setAnnouncePreviewing(true);
+    // playAnnouncement resolves when the clip finishes (or is skipped).
+    playAnnouncement(name).then(() => setAnnouncePreviewing(false));
+  };
+
   const isApple = formData.songSource === 'apple';
   const windowStart = isApple ? Math.min(formData.startTime || 0, MAX_START) : 0;
   const windowDuration = isApple
@@ -315,6 +342,15 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
           <small className="form-hint">
             Used for "Now batting, …!" — defaults to the player name, edit only if the name needs phonetic help.
           </small>
+          <button
+            type="button"
+            className={`announce-preview-btn${announcePreviewing ? ' is-playing' : ''}`}
+            onClick={toggleAnnouncePreview}
+            disabled={!(formData.pronounced || formData.name || '').trim()}
+            aria-label={announcePreviewing ? 'Stop announcement preview' : 'Preview announcement'}
+          >
+            {announcePreviewing ? '⏹ Stop preview' : '🔊 Preview announcement'}
+          </button>
         </div>
 
         {!songOnly && (
