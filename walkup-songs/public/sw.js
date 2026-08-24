@@ -1,6 +1,6 @@
 // Dugout DJ Service Worker
 // Bump APP_VERSION when deploying breaking changes to force cache refresh.
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v9';
 const APP_CACHE = `dugoutdj-app-${APP_VERSION}`;
 const IMAGE_CACHE = 'dugoutdj-images-v1';
 
@@ -34,6 +34,10 @@ self.addEventListener('fetch', event => {
   // Only handle GET requests
   if (request.method !== 'GET') return;
 
+  // API calls (search, media proxy) — always hit the network; Cloudflare's
+  // edge cache handles repeat fetches. Never let the SW cache API responses.
+  if (url.pathname.startsWith('/api/')) return;
+
   // YouTube thumbnails — cache first, 7-day freshness check
   if (url.hostname === 'i.ytimg.com') {
     event.respondWith(imageCacheFirst(request));
@@ -46,7 +50,14 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // index.html and other same-origin files — stale-while-revalidate:
+  // Page navigations — always fetch the freshest index.html (it references
+  // the newest hashed bundle), falling back to cache only when offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirst(APP_CACHE, request));
+    return;
+  }
+
+  // Other same-origin files — stale-while-revalidate:
   // serve cached version instantly, refresh cache in background.
   if (url.origin === self.location.origin) {
     event.respondWith(staleWhileRevalidate(APP_CACHE, request));
@@ -64,6 +75,20 @@ async function cacheFirst(cacheName, request) {
     cache.put(request, response.clone());
   }
   return response;
+}
+
+// Network first: fetch fresh from the network, store in cache, fall back to
+// the cached copy if the network is unavailable.
+async function networkFirst(cacheName, request) {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request);
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    return cached || new Response('', { status: 408 });
+  }
 }
 
 // Stale-while-revalidate: return cached response immediately if available,
