@@ -224,7 +224,10 @@ export default function ParentView({ teamId }) {
                     }
                   }}
                 >
-                  <span className="parent-order">{index + 1}</span>
+                  {/* Show the jersey number instead of the roster slot number. */}
+                  {player.number ? (
+                    <span className="parent-order">#{player.number}</span>
+                  ) : null}
                   {playerArtwork(player) && (
                     <img
                       src={playerArtwork(player)}
@@ -235,7 +238,6 @@ export default function ParentView({ teamId }) {
                   <span className="parent-player-info">
                     <span className="parent-name">
                       {player.name}
-                      {player.number ? <span className="parent-number">#{player.number}</span> : null}
                     </span>
                     <span className="parent-song">
                       {player.songTitle || 'No song selected'}
