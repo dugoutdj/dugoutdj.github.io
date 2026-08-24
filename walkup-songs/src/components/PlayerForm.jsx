@@ -33,6 +33,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // Set while a handle is being dragged, so the wrapper's click-to-move
   // doesn't fire from the click that ends a drag.
   const draggingRef = useRef(false);
+  const trackRef = useRef(null);
 
   useEffect(() => {
     if (player) {
@@ -172,32 +173,22 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     setFormData((prev) => ({ ...prev, startTime: start, duration }));
   };
 
-  // Visible grab handles at the window edges carry the resize drag.
-  // setPointerCapture ensures touch events keep flowing even when the
-  // user's finger slides off the narrow handle — critical on mobile.
-  const handleDragStart = (which) => (e) => {
-    e.preventDefault();
+  // Helper: attach pointer-move/up to resize or slide the window.
+  const startDrag = (onMove) => (e) => {
     e.stopPropagation();
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
     const el = e.currentTarget;
-    const wrapEl = el.parentElement;
-    const rect = wrapEl.getBoundingClientRect();
-    draggingRef.current = true;
-    // Capture the pointer on this element so touch-move keeps firing
-    // even if the finger drifts outside the handle's box.
     try { el.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    draggingRef.current = true;
     const move = (ev) => {
       const pct = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-      const secs = Math.round(pct * PREVIEW_SECONDS);
-      if (which === 'start') {
-        handleStartChange(String(secs));
-      } else {
-        handleEndChange(String(secs));
-      }
+      onMove(pct);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      // Clear after the trailing click so click-to-move stays suppressed.
       setTimeout(() => { draggingRef.current = false; }, 0);
     };
     window.addEventListener('pointermove', move);
@@ -300,13 +291,12 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
           <div className="form-group preview-window-group">
             <label>Pick the walk-up window (5–15s)</label>
             <div
-              className="preview-window-slider-wrap"
-              onClick={(e) => {
-                // Clicking the track moves the window; dragging a handle resizes it.
-                if (draggingRef.current) return;
+              className="preview-window-track"
+              ref={trackRef}
+              onPointerDown={(e) => {
                 if (e.target !== e.currentTarget) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const rect = trackRef.current.getBoundingClientRect();
+                const pct = (e.clientX - rect.left) / rect.width;
                 const center = pct * PREVIEW_SECONDS;
                 const start = Math.max(0, Math.min(
                   PREVIEW_SECONDS - windowDuration,
@@ -315,48 +305,33 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
                 setFormData((prev) => ({ ...prev, startTime: start, duration: windowDuration }));
               }}
             >
-              <input
-                type="range"
-                min="0"
-                max={MAX_START}
-                step="1"
-                value={windowStart}
-                onChange={(e) => handleStartChange(e.target.value)}
-                onPointerDown={() => { draggingRef.current = true; }}
-                onPointerUp={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
-                className="preview-window-slider preview-window-slider-start"
-                aria-label="Walk-up window start"
+              <div
+                className="preview-window-fill"
                 style={{
-                  background: `linear-gradient(to right,
-                    var(--border-color) 0%,
-                    var(--border-color) ${windowStartPct}%,
-                    var(--success-color) ${windowStartPct}%,
-                    var(--success-color) ${windowEndPct}%,
-                    var(--border-color) ${windowEndPct}%,
-                    var(--border-color) 100%)`
+                  left: `${windowStartPct}%`,
+                  width: `${windowEndPct - windowStartPct}%`
                 }}
-              />
-              <input
-                type="range"
-                min={MIN_WINDOW}
-                max={PREVIEW_SECONDS}
-                step="1"
-                value={windowEnd}
-                onChange={(e) => handleEndChange(e.target.value)}
-                className="preview-window-slider preview-window-slider-end"
-                aria-label="Walk-up window end"
+                onPointerDown={startDrag((pct) => {
+                  const newStart = Math.max(0, Math.min(
+                    PREVIEW_SECONDS - windowDuration,
+                    Math.round(pct * PREVIEW_SECONDS - windowDuration / 2)
+                  ));
+                  setFormData((prev) => ({ ...prev, startTime: newStart }));
+                })}
               />
               <div
-                className="preview-window-handle preview-window-handle-start"
+                className="preview-window-thumb preview-window-thumb-start"
                 style={{ left: `${windowStartPct}%` }}
-                onPointerDown={handleDragStart('start')}
-                aria-hidden="true"
+                onPointerDown={startDrag((pct) => {
+                  handleStartChange(String(Math.round(pct * PREVIEW_SECONDS)));
+                })}
               />
               <div
-                className="preview-window-handle preview-window-handle-end"
+                className="preview-window-thumb preview-window-thumb-end"
                 style={{ left: `${windowEndPct}%` }}
-                onPointerDown={handleDragStart('end')}
-                aria-hidden="true"
+                onPointerDown={startDrag((pct) => {
+                  handleEndChange(String(Math.round(pct * PREVIEW_SECONDS)));
+                })}
               />
             </div>
             <div className="preview-window-labels">
