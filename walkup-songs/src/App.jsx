@@ -70,6 +70,19 @@ function App() {
     }
   }, []);
 
+  // Restore a previously created share link so the parent URL is stable
+  // across refreshes and re-clicks. The id is persisted on the team record.
+  useEffect(() => {
+    if (!currentTeam) return;
+    const storedId = currentTeam.sharedTeamId || null;
+    setSharedTeamId(storedId);
+    setShareLink(storedId ? shareUrlForTeam(storedId) : null);
+    if (storedId && !shareStatus) {
+      setShareStatus('Your team link is ready — send it to parents:');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTeam?.id]);
+
   // Preload disabled to prevent playback interference
   // TODO: Re-enable preloading after fixing playback issues
 
@@ -309,12 +322,16 @@ function App() {
           startTime: p.startTime || 0,
           duration: p.duration || 10,
           songSource: p.songSource || ''
-        }))
+        })),
+        // Reuse the existing shared id so the URL never changes.
+        ...(currentTeam.sharedTeamId ? { teamId: currentTeam.sharedTeamId } : {})
       };
       const { teamId } = await createTeam(payload);
       const url = shareUrlForTeam(teamId);
       setSharedTeamId(teamId);
       setShareLink(url);
+      // Persist the id on the team so refreshes keep the same link.
+      storage.updateTeam(currentTeam.id, { sharedTeamId: teamId });
       try {
         await navigator.clipboard.writeText(url);
         setShareStatus('Link copied to clipboard! Share it with your team parents.');
