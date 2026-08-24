@@ -97,7 +97,10 @@ async function searchDeezer(term, limit) {
       trackName: d.title,
       artistName: (d.artist && d.artist.name) || '',
       collectionName: (d.album && d.album.title) || '',
+      // Provide BOTH field names: the client reads artworkUrl100 (Apple's
+      // name) — without it, Deezer-sourced results rendered with no art.
       artworkUrl: (d.album && d.album.cover_medium) || null,
+      artworkUrl100: (d.album && d.album.cover_medium) || null,
       previewUrl: d.preview,
       trackViewUrl: d.link || null
     }));
@@ -115,7 +118,9 @@ export async function onRequestGet(context) {
     return json({ error: 'Missing search term' }, 400);
   }
 
-  const cacheKey = `search:${term.toLowerCase().replace(/\s+/g, ' ')}`;
+  // v2 key: bumps cache namespace so entries cached before the Deezer
+  // artworkUrl100 fix don't keep serving art-less results.
+  const cacheKey = `search:v2:${term.toLowerCase().replace(/\s+/g, ' ')}`;
 
   // 1. Serve from cache when possible — zero upstream calls.
   const cached = await store.get(cacheKey);
