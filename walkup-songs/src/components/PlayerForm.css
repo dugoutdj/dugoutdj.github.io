@@ -319,3 +319,34 @@
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
+
+/* Live preview button under the window slider */
+.preview-play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 0.5rem;
+  border: 1px solid var(--primary-color);
+  background: var(--bg-primary);
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.preview-play-btn:hover {
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.preview-play-btn.is-playing {
+  background: var(--primary-color);
+  color: #fff;
+}

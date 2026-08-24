@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatTime } from '../utils/youtube';
 import { searchTracks } from '../utils/previewDownloader';
+import { mediaProxy } from '../utils/media';
 import './PlayerForm.css';
 
 // The Apple preview is 30 seconds; the walk-up window is a selectable slice
@@ -34,6 +35,9 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // doesn't fire from the click that ends a drag.
   const draggingRef = useRef(false);
   const trackRef = useRef(null);
+  // Live preview of the selected walk-up window (played from previewUrl).
+  const [previewing, setPreviewing] = useState(false);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     if (player) {
@@ -139,6 +143,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
 
   // Slide/resize the walk-up window within the 30-second preview.
   const handleStartChange = (value) => {
+    // Stop any live preview so it doesn't keep playing the old window.
+    stopPreview();
     // Moving the left edge keeps the right edge fixed (resizes the window);
     // only when a min/max clamp kicks in does the right edge move along.
     let start = Math.max(0, Math.min(MAX_START, Number(value) || 0));
@@ -159,6 +165,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   };
 
   const handleEndChange = (value) => {
+    // Stop any live preview so it doesn't keep playing the old window.
+    stopPreview();
     let end = Math.max(MIN_WINDOW, Math.min(PREVIEW_SECONDS, Number(value) || WINDOW_SECONDS));
     let start = Math.max(0, Math.min(MAX_START, formData.startTime || 0));
     let duration = end - start;
@@ -193,6 +201,73 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  };
+
+  // Stop any running preview when the form unmounts.
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+      }
+    };
+  }, []);
+
+  // Live-play the currently selected window (startTime → startTime+duration)
+  // from the Apple preview, so parents can hear exactly what will play.
+  const stopPreview = () => {
+    const audio = audioRef.current;
+    if (audio) audio.pause();
+    setPreviewing(false);
+  };
+
+  const togglePreview = () => {
+    if (!formData.previewUrl) return;
+    if (previewing) {
+      stopPreview();
+      return;
+    }
+    const start = Math.max(0, Number(formData.startTime) || 0);
+    const duration = Math.max(1, Number(formData.duration) || WINDOW_SECONDS);
+    const end = start + duration;
+
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audioRef.current = audio;
+    }
+    const audio = audioRef.current;
+
+    audio.src = mediaProxy(formData.previewUrl);
+    audio.currentTime = start;
+    audio.volume = 1;
+
+    const onTime = () => {
+      if (audio.currentTime >= end) {
+        audio.pause();
+        setPreviewing(false);
+      }
+    };
+    const onEnd = () => setPreviewing(false);
+    const onError = () => setPreviewing(false);
+    audio.addEventListener('timeupdate', onTime);
+    audio.addEventListener('ended', onEnd);
+    audio.addEventListener('error', onError, { once: true });
+
+    const cleanup = () => {
+      audio.removeEventListener('timeupdate', onTime);
+      audio.removeEventListener('ended', onEnd);
+      audio.removeEventListener('error', onError);
+    };
+    audio.onpause = () => {
+      if (audio.currentTime >= end || audio.ended) cleanup();
+    };
+
+    const playPromise = audio.play();
+    if (playPromise && playPromise.catch) playPromise.catch(() => setPreviewing(false));
+    setPreviewing(true);
   };
 
   const isApple = formData.songSource === 'apple';
@@ -295,6 +370,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
               ref={trackRef}
               onPointerDown={(e) => {
                 if (e.target !== e.currentTarget) return;
+                stopPreview();
                 const rect = trackRef.current.getBoundingClientRect();
                 const pct = (e.clientX - rect.left) / rect.width;
                 const center = pct * PREVIEW_SECONDS;
@@ -312,6 +388,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
                   width: `${windowEndPct - windowStartPct}%`
                 }}
                 onPointerDown={startDrag((pct) => {
+                  stopPreview();
                   const newStart = Math.max(0, Math.min(
                     PREVIEW_SECONDS - windowDuration,
                     Math.round(pct * PREVIEW_SECONDS - windowDuration / 2)
@@ -339,6 +416,16 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
               <span className="preview-window-length">{windowDuration}s</span>
               <span>⏹ {formatTime(windowEnd)}</span>
             </div>
+            {formData.previewUrl && (
+              <button
+                type="button"
+                className={`preview-play-btn${previewing ? ' is-playing' : ''}`}
+                onClick={togglePreview}
+                aria-label={previewing ? 'Stop preview' : 'Preview this section'}
+              >
+                {previewing ? '⏹' : '▶'} Preview section
+              </button>
+            )}
           </div>
         )}
 
