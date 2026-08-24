@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchTeam, updatePlayerSong } from '../utils/api';
 import { playerArtwork } from '../utils/song';
+import { mediaProxy } from '../utils/media';
 import PlayerForm from './PlayerForm';
 import './ParentView.css';
 
 // Simplified view for parents opening a shared /team/<id> link. Shows the
 // roster read-only; tapping a player opens the song editor. Saving a song
 // writes straight to the Cloudflare API — no export/import round-trip.
+// Each row also has a ▶ preview button that plays the exact walk-up window
+// (startTime → startTime+duration) of the saved song.
 export default function ParentView({ teamId }) {
   const [team, setTeam] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -15,6 +18,9 @@ export default function ParentView({ teamId }) {
   const [saveError, setSaveError] = useState(null);
   const [saveConfirm, setSaveConfirm] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Which player id is currently playing a preview (null = none).
+  const [previewingId, setPreviewingId] = useState(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +35,94 @@ export default function ParentView({ teamId }) {
     return () => { cancelled = true; };
   }, [teamId, reloadKey]);
 
+  // Tear down the shared audio element on unmount.
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+      }
+    };
+  }, []);
+
   const retry = () => setReloadKey((k) => k + 1);
+
+  const stopPreview = () => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+    }
+    setPreviewingId(null);
+  };
+
+  // Play the exact walk-up window of a player's saved song from the 30s
+  // Apple preview. Streams via the media proxy (mobile-safe) and stops at
+  // startTime + duration.
+  const previewPlayer = (player) => {
+    if (!player || player.songSource !== 'apple' || !player.previewUrl) return;
+
+    // Tapping the same row again stops playback.
+    if (previewingId !== null && String(previewingId) === String(player.id)) {
+      stopPreview();
+      return;
+    }
+
+    stopPreview();
+
+    const start = Math.max(0, Number(player.startTime) || 0);
+    const duration = Math.max(1, Number(player.duration) || 10);
+    const end = start + duration;
+
+    // Create the audio element lazily on first use.
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audioRef.current = audio;
+    }
+    const audio = audioRef.current;
+
+    // Set the source inside the tap so iOS keeps the user gesture.
+    audio.src = mediaProxy(player.previewUrl);
+    audio.currentTime = start;
+    audio.volume = 1;
+
+    const onTime = () => {
+      if (audio.currentTime >= end) {
+        audio.pause();
+        setPreviewingId(null);
+      }
+    };
+    const onEnd = () => setPreviewingId(null);
+    const onError = () => {
+      setPreviewingId(null);
+      setSaveError('Preview unavailable — try again in a moment.');
+    };
+    audio.addEventListener('timeupdate', onTime);
+    audio.addEventListener('ended', onEnd);
+    audio.addEventListener('error', onError, { once: true });
+
+    // Clean up listeners when playback of this window stops (either the
+    // timeupdate stop above or the user tapping stop).
+    const cleanup = () => {
+      audio.removeEventListener('timeupdate', onTime);
+      audio.removeEventListener('ended', onEnd);
+      audio.removeEventListener('error', onError);
+    };
+    audio.onpause = () => {
+      if (audio.currentTime >= end || audio.ended) cleanup();
+    };
+
+    const playPromise = audio.play();
+    if (playPromise && playPromise.catch) {
+      playPromise.catch(() => {
+        setPreviewingId(null);
+        setSaveError('Preview blocked — tap again to play.');
+      });
+    }
+    setPreviewingId(String(player.id));
+  };
 
   if (!team) {
     return (
@@ -73,6 +166,8 @@ export default function ParentView({ teamId }) {
     }
   };
 
+  const previewable = (player) => player.songSource === 'apple' && !!player.previewUrl;
+
   return (
     <div className="parent-view">
       <header className="parent-header">
@@ -89,7 +184,7 @@ export default function ParentView({ teamId }) {
         <div className="parent-edit">
           <div className="parent-edit-heading">
             <h3>Update song for {editingPlayer.name}</h3>
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditingPlayer(null)}>
+            <button className="btn btn-secondary btn-sm" onClick={() => { stopPreview(); setEditingPlayer(null); }}>
               ← Back to roster
             </button>
           </div>
@@ -97,45 +192,70 @@ export default function ParentView({ teamId }) {
             player={editingPlayer}
             songOnly
             onSave={handleSave}
-            onCancel={() => setEditingPlayer(null)}
+            onCancel={() => { stopPreview(); setEditingPlayer(null); }}
           />
           {saving && <div className="parent-saving">Saving…</div>}
         </div>
       ) : (
         <>
           <p className="parent-intro">
-            Tap a player to update their walk-up song. Changes save instantly — no need to send anything back.
+            Tap ▶ to hear the exact walk-up section, or tap a player to update their song. Changes save instantly — no need to send anything back.
           </p>
           <div className="parent-roster">
             {team.players.length === 0 && (
               <div className="parent-empty">No players in this roster yet.</div>
             )}
-            {team.players.map((player, index) => (
-              <button
-                key={player.id || index}
-                className="parent-player-row"
-                onClick={() => setEditingPlayer(player)}
-              >
-                <span className="parent-order">{index + 1}</span>
-                {playerArtwork(player) && (
-                  <img
-                    src={playerArtwork(player)}
-                    alt={player.songTitle || player.name}
-                    className="parent-thumb"
-                  />
-                )}
-                <span className="parent-player-info">
-                  <span className="parent-name">
-                    {player.name}
-                    {player.number ? <span className="parent-number">#{player.number}</span> : null}
+            {team.players.map((player, index) => {
+              const isPreviewing = previewingId !== null && String(previewingId) === String(player.id);
+              return (
+                <div
+                  key={player.id || index}
+                  className="parent-player-row"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setEditingPlayer(player)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setEditingPlayer(player);
+                    }
+                  }}
+                >
+                  <span className="parent-order">{index + 1}</span>
+                  {playerArtwork(player) && (
+                    <img
+                      src={playerArtwork(player)}
+                      alt={player.songTitle || player.name}
+                      className="parent-thumb"
+                    />
+                  )}
+                  <span className="parent-player-info">
+                    <span className="parent-name">
+                      {player.name}
+                      {player.number ? <span className="parent-number">#{player.number}</span> : null}
+                    </span>
+                    <span className="parent-song">
+                      {player.songTitle || 'No song selected'}
+                    </span>
                   </span>
-                  <span className="parent-song">
-                    {player.songTitle || 'No song selected'}
-                  </span>
-                </span>
-                <span className="parent-edit-hint">✏️</span>
-              </button>
-            ))}
+                  {previewable(player) ? (
+                    <button
+                      type="button"
+                      className={`parent-preview-btn${isPreviewing ? ' is-playing' : ''}`}
+                      aria-label={isPreviewing ? 'Stop preview' : 'Preview walk-up section'}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        previewPlayer(player);
+                      }}
+                    >
+                      {isPreviewing ? '⏹' : '▶'}
+                    </button>
+                  ) : (
+                    <span className="parent-edit-hint">✏️</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

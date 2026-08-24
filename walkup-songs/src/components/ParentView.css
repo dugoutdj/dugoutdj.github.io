@@ -92,6 +92,39 @@
   box-shadow: var(--shadow);
 }
 
+.parent-player-row:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Preview button on each roster row — plays the saved walk-up window */
+.parent-preview-btn {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--primary-color);
+  background: var(--bg-primary);
+  color: var(--primary-color);
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.parent-preview-btn:hover {
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.parent-preview-btn.is-playing {
+  background: var(--primary-color);
+  color: #fff;
+}
+
 .parent-order {
   font-size: 1rem;
   font-weight: 600;
