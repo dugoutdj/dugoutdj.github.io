@@ -8,7 +8,12 @@
 // also the streaming source, so a saved song and a streamed song are the same
 // audio.
 
-const SEARCH_URL = 'https://itunes.apple.com/search';
+// Same-origin proxy (Cloudflare Pages Function) so mobile clients never
+// hit itunes.apple.com directly — iOS WebKit in particular fails those
+// requests from phones. Falls back to Apple's API directly when the proxy
+// isn't available (local dev / previews without Functions).
+const SEARCH_URL = '/api/search';
+const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
 const SEARCH_LIMIT = 8;
 
 // Strip YouTube-style video-title noise so "Artist - Song (Official Video)
@@ -27,16 +32,7 @@ export function cleanTitle(title) {
  * Live search for the Add Player form. Returns the raw top matches so the
  * user can pick the exact recording.
  */
-export async function searchTracks(query) {
-  const term = cleanTitle(query);
-  if (!term) return [];
-
-  const url = `${SEARCH_URL}?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${SEARCH_LIMIT}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Apple's search API failed (HTTP ${res.status}).`);
-  }
-  const data = await res.json();
+function mapResults(data) {
   return (data.results || [])
     .filter((r) => r.previewUrl)
     .map((r) => ({
@@ -48,6 +44,31 @@ export async function searchTracks(query) {
       previewUrl: r.previewUrl,
       trackViewUrl: r.trackViewUrl || null
     }));
+}
+
+export async function searchTracks(query) {
+  const term = cleanTitle(query);
+  if (!term) return [];
+
+  // Primary: same-origin proxy. On the deployed site this always works and
+  // benefits from edge caching.
+  try {
+    const res = await fetch(`${SEARCH_URL}?term=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.results)) return mapResults(data);
+    }
+  } catch {
+    // Proxy unavailable — fall through to Apple directly.
+  }
+
+  const direct = await fetch(
+    `${ITUNES_SEARCH_URL}?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${SEARCH_LIMIT}`
+  );
+  if (!direct.ok) {
+    throw new Error(`Apple's search API failed (HTTP ${direct.status}).`);
+  }
+  return mapResults(await direct.json());
 }
 
 // Score iTunes results against the cleaned title: count matching significant
