@@ -205,7 +205,10 @@ export default function ParentView({ teamId }) {
             {team.players.length === 0 && (
               <div className="parent-empty">No players in this roster yet.</div>
             )}
-            {team.players.map((player, index) => {
+            {/* Sort alphabetically by name so parents can find their kid easily. */}
+            {[...team.players].sort((a, b) =>
+              String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+            ).map((player, index) => {
               const isPreviewing = previewingId !== null && String(previewingId) === String(player.id);
               return (
                 <div
