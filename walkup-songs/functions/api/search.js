@@ -1,14 +1,13 @@
 // Server-side proxy for Apple's iTunes Search API.
 //
-// Why: some mobile networks/clients (iOS WebKit in particular — Private
-// Relay, carrier or DNS-level blocking, Apple's own bot checks on mobile
-// IPs) fail direct browser fetches to itunes.apple.com, while the same call
-// from a desktop works fine. Proxying through the Pages Function means the
-// phone only ever talks to its own origin (dugoutdj.com) and Cloudflare's
-// network does the iTunes request. Responses are cached at the edge for an
-// hour to stay friendly to the API.
+// Why: iOS Safari/Chrome fail direct browser fetches to itunes.apple.com
+// (Apple bot-checks mobile IPs + iOS WebKit quirks), so we proxy through
+// Cloudflare Pages Functions instead. Apple also blocks requests from
+// Cloudflare's default Worker User-Agent, so we send a browser-like one.
 
 const ITUNES_SEARCH = 'https://itunes.apple.com/search';
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 export async function onRequestGet(context) {
   const { request } = context;
@@ -27,13 +26,24 @@ export async function onRequestGet(context) {
   target.searchParams.set('limit', limit);
 
   try {
-    const upstream = await fetch(target.toString());
-    const body = await upstream.json();
-    return json(body, upstream.status, {
-      'Cache-Control': 'public, max-age=3600'
+    const upstream = await fetch(target.toString(), {
+      headers: { 'User-Agent': BROWSER_UA }
     });
-  } catch {
-    return json({ error: 'Apple search unavailable' }, 502);
+    if (!upstream.ok) {
+      let detail = '';
+      try { detail = (await upstream.text()).slice(0, 300); } catch { /* non-text response */ }
+      return json(
+        { error: `Apple API ${upstream.status}`, detail },
+        upstream.status
+      );
+    }
+    const body = await upstream.json();
+    return json(body, 200, { 'Cache-Control': 'public, max-age=3600' });
+  } catch (err) {
+    return json(
+      { error: 'Apple search unavailable', detail: String(err?.message || err) },
+      502
+    );
   }
 }
 
