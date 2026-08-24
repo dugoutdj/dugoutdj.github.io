@@ -5,6 +5,10 @@
 // `songKey` is the stable identifier used for offline storage and playback
 // lookups. Apple keys are prefixed so they can never collide with a video ID.
 
+// Apple artwork is proxied through dugoutdj.com so mobile clients (which
+// are blocked from mzstatic.com) can display it.
+import { mediaProxy } from './media';
+
 export function songKey(player) {
   if (!player) return null;
   if (player.songSource === 'apple') {
@@ -22,7 +26,7 @@ export function playerHasSong(player) {
 export function playerArtwork(player) {
   if (!player) return null;
   if (player.songSource === 'apple' && player.artworkUrl) {
-    return String(player.artworkUrl).replace('100x100', '600x600');
+    return mediaProxy(String(player.artworkUrl).replace('100x100', '600x600'));
   }
   return player.songThumbnail || null;
 }

@@ -8,6 +8,10 @@
 // also the streaming source, so a saved song and a streamed song are the same
 // audio.
 
+// Apple/Deezer media (artwork + audio previews) is blocked from mobile
+// networks, so it's proxied through dugoutdj.com's /api/media function.
+import { mediaProxy } from './media';
+
 // Same-origin proxy (Cloudflare Pages Function) so mobile clients never
 // hit itunes.apple.com directly — iOS WebKit in particular fails those
 // requests from phones. The proxy searches Apple first and falls back to
@@ -47,8 +51,8 @@ function mapResults(data) {
       trackName: r.trackName,
       artistName: r.artistName,
       collectionName: r.collectionName,
-      artworkUrl: r.artworkUrl100 || null,
-      previewUrl: r.previewUrl,
+      artworkUrl: mediaProxy(r.artworkUrl100) || null,
+      previewUrl: mediaProxy(r.previewUrl),
       trackViewUrl: r.trackViewUrl || null
     }));
 }
@@ -160,7 +164,9 @@ export async function searchPreview(title) {
 
 async function fetchPreviewBlob(previewUrl, onProgress) {
   onProgress?.({ stage: 'downloading', downloaded: 0, total: 0 });
-  const res = await fetch(previewUrl);
+  // Route Apple/Deezer audio through the same-origin proxy so mobile
+  // clients (which are blocked from Apple CDNs) can download it.
+  const res = await fetch(mediaProxy(previewUrl));
   if (!res.ok) {
     throw new Error(`Preview download failed (HTTP ${res.status}).`);
   }
