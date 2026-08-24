@@ -80,7 +80,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
         setAppleResults(results);
       } catch (err) {
         console.error('Apple search error:', err);
-        setAppleError('Search failed. Please try again.');
+        setAppleError(err.message || 'Search failed. Please try again.');
       } finally {
         setAppleSearching(false);
       }
