@@ -22,6 +22,7 @@ import {
 } from './utils/offlineLibrary';
 import { downloadPreview } from './utils/previewDownloader';
 import { songKey } from './utils/song';
+import { playAnnouncement, stopAnnouncement, preloadAnnouncements } from './utils/announcer';
 import './App.css';
 
 // Keep the save-error banner human-friendly; map network failures to a
@@ -61,6 +62,15 @@ function App() {
 
   const currentTeam = storage.currentTeam;
   const players = currentTeam?.players || [];
+
+  // Preload the announcer clips for the whole roster so the first tap
+  // on game day is instant. Each name is generated once server-side
+  // and cached in KV, so replays are free.
+  useEffect(() => {
+    if (players.length === 0) return;
+    preloadAnnouncements(players.map((p) => p.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [players.length]);
 
   // Initialize first team if none exists
   useEffect(() => {
@@ -381,13 +391,20 @@ function App() {
     const targetPlayer = players[index];
     setCurrentPlayerIndex(index);
 
-    // Play song without auto-advance callback
-    player.playSong(
-      targetPlayer,
-      targetPlayer.startTime,
-      targetPlayer.duration,
-      null // No auto-advance
-    );
+    const startSong = () => {
+      // Play song without auto-advance callback
+      player.playSong(
+        targetPlayer,
+        targetPlayer.startTime,
+        targetPlayer.duration,
+        null // No auto-advance
+      );
+    };
+
+    // Announce the player's name first, then play the walk-up song.
+    // If the announcement is unavailable (no key, quota, network), the
+    // song plays immediately.
+    playAnnouncement(targetPlayer.name).then(() => startSong());
   };
 
   const handlePlay = () => {
@@ -404,6 +421,7 @@ function App() {
   };
 
   const handleStop = () => {
+    stopAnnouncement();
     player.stopSong();
     setCurrentPlayerIndex(null);
   };
