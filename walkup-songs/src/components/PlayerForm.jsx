@@ -17,6 +17,38 @@ const MAX_START = PREVIEW_SECONDS - MIN_WINDOW;
 // generous default so any portion of the song can be selected.
 const YT_FALLBACK_SECONDS = 300; // 5 minutes
 
+// Format seconds as "m:ss" (or "h:mm:ss" for an hour+); plain seconds under
+// a minute reads cleaner. Used to display/seed the YouTube start field.
+const formatStartText = (secs) => {
+  const s = Math.max(0, Math.floor(secs || 0));
+  if (s < 60) return String(s);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+};
+
+// Parse "1:35", "1:02:05", or plain seconds ("95") into total seconds.
+// Returns null when the text is not a valid time (keeps the previous value).
+const parseStartText = (text) => {
+  const t = (text || '').trim();
+  if (!t) return 0;
+  if (t.includes(':')) {
+    const parts = t.split(':').map((p) => p.trim());
+    if (parts.length > 3 || parts.some((p) => p === '' || !/^\d+$/.test(p))) return null;
+    let total = 0;
+    let mult = 1;
+    for (let i = parts.length - 1; i >= 0; i--) {
+      total += parseInt(parts[i], 10) * mult;
+      mult *= 60;
+    }
+    return total;
+  }
+  if (!/^\d+$/.test(t)) return null;
+  return parseInt(t, 10);
+};
+
 export default function PlayerForm({ player, onSave, onCancel, songOnly = false }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -45,6 +77,9 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // whole song (null = still reading, 0 = couldn't read -> numeric fallback).
   const [ytDuration, setYtDuration] = useState(null);
   const ytDurationVideoRef = useRef(''); // guard against stale async results
+  // Raw text of the YouTube start input, so the user can type "1:35" (m:ss)
+  // or plain seconds while the stored value stays in seconds for playback.
+  const [ytStartText, setYtStartText] = useState('0');
   // Hidden YT player used to preview a YouTube walk-up window.
   const ytPreviewPlayerRef = useRef(null);
   const ytPreviewTimerRef = useRef(null);
@@ -91,6 +126,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
       if (player.songVideoId && player.songSource !== 'apple') {
         setYtDuration(null);
         ytDurationVideoRef.current = player.songVideoId;
+        setYtStartText(formatStartText(player.startTime || 0));
         getVideoDuration(player.songVideoId).then((d) => {
           if (ytDurationVideoRef.current === player.songVideoId) setYtDuration(d);
         });
@@ -220,6 +256,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
       // and warm the hidden preview player (iOS needs it ready for the tap).
       setYtDuration(null);
       ytDurationVideoRef.current = videoId;
+      setYtStartText('0');
       getVideoDuration(videoId).then((d) => {
         if (ytDurationVideoRef.current === videoId) setYtDuration(d);
       });
@@ -686,17 +723,20 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
               <>
                 <div className="youtube-window-row">
                   <div className="youtube-window-field">
-                    <label htmlFor="yt-start">Start at (seconds)</label>
+                    <label htmlFor="yt-start">Start at</label>
                     <input
                       id="yt-start"
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="1"
-                      value={formData.startTime || 0}
+                      type="text"
+                      value={ytStartText}
+                      placeholder="e.g. 1:35 or 95"
                       onChange={(e) => {
                         stopPreview();
-                        setFormData({ ...formData, startTime: Math.max(0, Number(e.target.value) || 0) });
+                        const text = e.target.value;
+                        setYtStartText(text);
+                        const parsed = parseStartText(text);
+                        if (parsed !== null) {
+                          setFormData({ ...formData, startTime: Math.max(0, parsed) });
+                        }
                       }}
                       className="input"
                     />
@@ -721,8 +761,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
                   </div>
                 </div>
                 <small className="form-hint">
-                  Enter the exact second the walk-up starts (e.g. 95 = 1:35) and how long it
-                  plays (up to {MAX_WINDOW}s). The full YouTube video is available.
+                  Enter when the walk-up starts — m:ss (1:35) or plain seconds (95) — and how
+                  long it plays (up to {MAX_WINDOW}s). The full YouTube video is available.
                 </small>
               </>
             )}
