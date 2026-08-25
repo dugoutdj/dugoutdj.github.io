@@ -540,6 +540,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
 
         <div className="form-group">
           <label>Song</label>
+          <div className="song-source-box">
           <div className="apple-search-box">
             <input
               type="text"
@@ -577,21 +578,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
             </div>
           )}
 
-          {isApple && (
-            <div className="video-preview">
-              <small>🎵 {formData.songTitle}</small>
-            </div>
-          )}
-
-          {isYouTube && (
-            <div className="video-preview youtube-video-preview">
-              {formData.songThumbnail && (
-                <img src={formData.songThumbnail} alt={formData.songTitle} />
-              )}
-              <small>▶️ {formData.songTitle || 'YouTube video'}</small>
-            </div>
-          )}
-
           <div className="form-divider"><span>OR</span></div>
 
           <div className="form-group youtube-url-group">
@@ -620,7 +606,17 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
               start and length below.
             </small>
           </div>
+          </div>
         </div>
+
+        {(isApple || isYouTube) && formData.songTitle && (
+          <div className="video-preview song-loaded-preview">
+            {isYouTube && formData.songThumbnail && (
+              <img src={formData.songThumbnail} alt={formData.songTitle} />
+            )}
+            <small>{isYouTube ? '▶️' : '🎵'} {formData.songTitle}</small>
+          </div>
+        )}
 
         {(isApple || isYouTube) && (
           <div className="form-group preview-window-group">
