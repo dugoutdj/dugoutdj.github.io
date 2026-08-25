@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { formatTime, extractVideoId, fetchVideoInfo } from '../utils/youtube';
+import { formatTime, extractVideoId, fetchVideoInfo, getVideoDuration, loadYouTubeAPI } from '../utils/youtube';
 import { searchTracks } from '../utils/previewDownloader';
 import { mediaProxy } from '../utils/media';
 import { playAnnouncement, stopAnnouncement } from '../utils/announcer';
@@ -37,6 +37,21 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubeLoading, setYoutubeLoading] = useState(false);
   const [youtubeError, setYoutubeError] = useState(null);
+  // Known length of the loaded YouTube video, so the slider track spans the
+  // whole song (null = still reading, 0 = couldn't read -> numeric fallback).
+  const [ytDuration, setYtDuration] = useState(null);
+  const ytDurationVideoRef = useRef(''); // guard against stale async results
+  // Hidden YT player used to preview a YouTube walk-up window.
+  const ytPreviewPlayerRef = useRef(null);
+  const ytPreviewTimerRef = useRef(null);
+
+  // The walk-up window model is shared by both sources: a window of
+  // [start, start+duration) over the source's total length. Apple caps the
+  // track at the 30s preview; YouTube spans the full video.
+  const isApple = formData.songSource === 'apple';
+  const isYouTube = !isApple && !!formData.songVideoId;
+  const totalSeconds = isApple ? PREVIEW_SECONDS : (ytDuration || 0);
+  const maxStart = Math.max(0, totalSeconds - MIN_WINDOW);
   // Set while a handle is being dragged, so the wrapper's click-to-move
   // doesn't fire from the click that ends a drag.
   const draggingRef = useRef(false);
@@ -65,6 +80,16 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
         startTime: start,
         duration
       });
+      // Editing an existing YouTube player: read its length so the slider
+      // track matches the full video, and warm the preview player.
+      if (player.songVideoId && player.songSource !== 'apple') {
+        setYtDuration(null);
+        ytDurationVideoRef.current = player.songVideoId;
+        getVideoDuration(player.songVideoId).then((d) => {
+          if (ytDurationVideoRef.current === player.songVideoId) setYtDuration(d);
+        });
+        getYtPreviewPlayer().catch(() => {});
+      }
     }
   }, [player]);
 
@@ -182,9 +207,17 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
         previewUrl: '',
         artworkUrl: '',
         startTime: 0,
-        duration: 20
+        duration: WINDOW_SECONDS
       }));
       setYoutubeUrl('');
+      // Read the video's length so the slider track spans the whole song,
+      // and warm the hidden preview player (iOS needs it ready for the tap).
+      setYtDuration(null);
+      ytDurationVideoRef.current = videoId;
+      getVideoDuration(videoId).then((d) => {
+        if (ytDurationVideoRef.current === videoId) setYtDuration(d);
+      });
+      getYtPreviewPlayer().catch(() => {});
     } catch {
       setYoutubeError("Couldn't load that video \u2014 check the link and try again.");
     } finally {
@@ -192,16 +225,17 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     }
   };
 
-  // Slide/resize the walk-up window within the 30-second preview.
+  // Slide/resize the walk-up window within the source's total length
+  // (30s Apple preview, or the full YouTube video).
   const handleStartChange = (value) => {
     // Stop any live preview so it doesn't keep playing the old window.
     stopPreview();
     // Moving the left edge keeps the right edge fixed (resizes the window);
     // only when a min/max clamp kicks in does the right edge move along.
-    let start = Math.max(0, Math.min(MAX_START, Number(value) || 0));
+    let start = Math.max(0, Math.min(maxStart, Number(value) || 0));
     const currentEnd = Math.min(
       (formData.startTime || 0) + Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, formData.duration || WINDOW_SECONDS)),
-      PREVIEW_SECONDS
+      totalSeconds
     );
     let duration = currentEnd - start;
     if (duration < MIN_WINDOW) {
@@ -218,8 +252,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   const handleEndChange = (value) => {
     // Stop any live preview so it doesn't keep playing the old window.
     stopPreview();
-    let end = Math.max(MIN_WINDOW, Math.min(PREVIEW_SECONDS, Number(value) || WINDOW_SECONDS));
-    let start = Math.max(0, Math.min(MAX_START, formData.startTime || 0));
+    let end = Math.max(MIN_WINDOW, Math.min(totalSeconds, Number(value) || WINDOW_SECONDS));
+    let start = Math.max(0, Math.min(maxStart, formData.startTime || 0));
     let duration = end - start;
     if (duration < MIN_WINDOW) {
       start = end - MIN_WINDOW;
@@ -254,10 +288,59 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     window.addEventListener('pointerup', up);
   };
 
+  // Lazily create the hidden YouTube player used to preview a YouTube
+  // walk-up window (Apple previews use a plain <audio> element instead).
+  const getYtPreviewPlayer = () => {
+    if (ytPreviewPlayerRef.current) return Promise.resolve(ytPreviewPlayerRef.current);
+    return loadYouTubeAPI().then((YT) => {
+      if (ytPreviewPlayerRef.current) return ytPreviewPlayerRef.current;
+      return new Promise((resolve) => {
+        let host = document.getElementById('player-form-yt-preview');
+        if (!host) {
+          host = document.createElement('div');
+          host.id = 'player-form-yt-preview';
+          host.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;';
+          document.body.appendChild(host);
+        }
+        let player = null;
+        try {
+          player = new YT.Player(host, {
+            height: '1',
+            width: '1',
+            playerVars: {
+              controls: 0,
+              disablekb: 1,
+              modestbranding: 1,
+              playsinline: 1
+            },
+            events: {
+              onReady: () => {
+                ytPreviewPlayerRef.current = player;
+                resolve(player);
+              },
+              onError: () => resolve(null)
+            }
+          });
+        } catch {
+          resolve(null);
+        }
+        // Safety net: don't hang callers if the API never fires onReady.
+        setTimeout(() => resolve(ytPreviewPlayerRef.current || null), 15000);
+      });
+    }).catch(() => null);
+  };
+
   // Stop any running preview when the form unmounts.
   useEffect(() => {
     return () => {
       stopAnnouncement();
+      if (ytPreviewTimerRef.current) {
+        clearInterval(ytPreviewTimerRef.current);
+        ytPreviewTimerRef.current = null;
+      }
+      const yt = ytPreviewPlayerRef.current;
+      if (yt && typeof yt.destroy === 'function') yt.destroy();
+      ytPreviewPlayerRef.current = null;
       const audio = audioRef.current;
       if (audio) {
         audio.pause();
@@ -270,13 +353,51 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // Live-play the currently selected window (startTime → startTime+duration)
   // from the Apple preview, so parents can hear exactly what will play.
   const stopPreview = () => {
+    // Stop a YouTube preview if one is running.
+    if (ytPreviewTimerRef.current) {
+      clearInterval(ytPreviewTimerRef.current);
+      ytPreviewTimerRef.current = null;
+    }
+    const yt = ytPreviewPlayerRef.current;
+    if (yt && typeof yt.pauseVideo === 'function') yt.pauseVideo();
+    // Stop an Apple <audio> preview if one is running.
     const audio = audioRef.current;
     if (audio) audio.pause();
     setPreviewing(false);
   };
 
+  // Play the selected walk-up window through the hidden YouTube player.
+  const playYtPreview = async (start, duration) => {
+    const yt = await getYtPreviewPlayer();
+    if (!yt || !formData.songVideoId) {
+      setPreviewing(false);
+      return;
+    }
+    const end = start + duration;
+    try {
+      yt.loadVideoById({ videoId: formData.songVideoId, startSeconds: start });
+      yt.playVideo();
+      setPreviewing(true);
+      // Poll the playback position and stop exactly at start + duration.
+      if (ytPreviewTimerRef.current) clearInterval(ytPreviewTimerRef.current);
+      ytPreviewTimerRef.current = setInterval(() => {
+        let t = 0;
+        try { t = yt.getCurrentTime(); } catch { /* player busy */ }
+        if (t >= end) {
+          if (ytPreviewTimerRef.current) {
+            clearInterval(ytPreviewTimerRef.current);
+            ytPreviewTimerRef.current = null;
+          }
+          if (typeof yt.pauseVideo === 'function') yt.pauseVideo();
+          setPreviewing(false);
+        }
+      }, 100);
+    } catch {
+      setPreviewing(false);
+    }
+  };
+
   const togglePreview = () => {
-    if (!formData.previewUrl) return;
     if (previewing) {
       stopPreview();
       return;
@@ -285,6 +406,13 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     stopAnnouncePreview();
     const start = Math.max(0, Number(formData.startTime) || 0);
     const duration = Math.max(1, Number(formData.duration) || WINDOW_SECONDS);
+
+    // YouTube songs preview through the hidden YT player.
+    if (isYouTube && formData.songVideoId) {
+      playYtPreview(start, duration);
+      return;
+    }
+    if (!formData.previewUrl) return;
     const end = start + duration;
 
     if (!audioRef.current) {
@@ -345,15 +473,15 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     playAnnouncement(name, formData.number).then(() => setAnnouncePreviewing(false));
   };
 
-  const isApple = formData.songSource === 'apple';
-  const isYouTube = !isApple && !!formData.songVideoId;
-  const windowStart = isApple ? Math.min(formData.startTime || 0, MAX_START) : 0;
-  const windowDuration = isApple
-    ? Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, formData.duration || WINDOW_SECONDS))
-    : WINDOW_SECONDS;
-  const windowEnd = Math.min(windowStart + windowDuration, PREVIEW_SECONDS);
-  const windowStartPct = (windowStart / PREVIEW_SECONDS) * 100;
-  const windowEndPct = (windowEnd / PREVIEW_SECONDS) * 100;
+  // Window geometry over the source's total length (30s Apple preview, or
+  // the full YouTube video). For YouTube, the slider only appears once the
+  // length is known; until then the numeric inputs below are used.
+  const sliderUsable = isApple || (isYouTube && (ytDuration || 0) > 0);
+  const windowStart = Math.min(formData.startTime || 0, Math.max(0, maxStart));
+  const windowDuration = Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, formData.duration || WINDOW_SECONDS));
+  const windowEnd = Math.min(windowStart + windowDuration, totalSeconds);
+  const windowStartPct = totalSeconds > 0 ? (windowStart / totalSeconds) * 100 : 0;
+  const windowEndPct = totalSeconds > 0 ? (windowEnd / totalSeconds) * 100 : 0;
 
   return (
     <div className="player-form">
@@ -494,61 +622,107 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
           </div>
         </div>
 
-        {isApple && (
+        {(isApple || isYouTube) && (
           <div className="form-group preview-window-group">
             <label>Pick the walk-up window (5–15s)</label>
-            <div
-              className="preview-window-track"
-              ref={trackRef}
-              onPointerDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                stopPreview();
-                const rect = trackRef.current.getBoundingClientRect();
-                const pct = (e.clientX - rect.left) / rect.width;
-                const center = pct * PREVIEW_SECONDS;
-                const start = Math.max(0, Math.min(
-                  PREVIEW_SECONDS - windowDuration,
-                  Math.round(center - windowDuration / 2)
-                ));
-                setFormData((prev) => ({ ...prev, startTime: start, duration: windowDuration }));
-              }}
-            >
-              <div
-                className="preview-window-fill"
-                style={{
-                  left: `${windowStartPct}%`,
-                  width: `${windowEndPct - windowStartPct}%`
-                }}
-                onPointerDown={startDrag((pct) => {
-                  stopPreview();
-                  const newStart = Math.max(0, Math.min(
-                    PREVIEW_SECONDS - windowDuration,
-                    Math.round(pct * PREVIEW_SECONDS - windowDuration / 2)
-                  ));
-                  setFormData((prev) => ({ ...prev, startTime: newStart }));
-                })}
-              />
-              <div
-                className="preview-window-thumb preview-window-thumb-start"
-                style={{ left: `${windowStartPct}%` }}
-                onPointerDown={startDrag((pct) => {
-                  handleStartChange(String(Math.round(pct * PREVIEW_SECONDS)));
-                })}
-              />
-              <div
-                className="preview-window-thumb preview-window-thumb-end"
-                style={{ left: `${windowEndPct}%` }}
-                onPointerDown={startDrag((pct) => {
-                  handleEndChange(String(Math.round(pct * PREVIEW_SECONDS)));
-                })}
-              />
-            </div>
-            <div className="preview-window-labels">
-              <span>▶ {formatTime(windowStart)}</span>
-              <span className="preview-window-length">{windowDuration}s</span>
-              <span>⏹ {formatTime(windowEnd)}</span>
-            </div>
-            {formData.previewUrl && (
+            {sliderUsable ? (
+              <>
+                <div
+                  className="preview-window-track"
+                  ref={trackRef}
+                  onPointerDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    stopPreview();
+                    const rect = trackRef.current.getBoundingClientRect();
+                    const pct = (e.clientX - rect.left) / rect.width;
+                    const center = pct * totalSeconds;
+                    const start = Math.max(0, Math.min(
+                      totalSeconds - windowDuration,
+                      Math.round(center - windowDuration / 2)
+                    ));
+                    setFormData((prev) => ({ ...prev, startTime: start, duration: windowDuration }));
+                  }}
+                >
+                  <div
+                    className="preview-window-fill"
+                    style={{
+                      left: `${windowStartPct}%`,
+                      width: `${windowEndPct - windowStartPct}%`
+                    }}
+                    onPointerDown={startDrag((pct) => {
+                      stopPreview();
+                      const newStart = Math.max(0, Math.min(
+                        totalSeconds - windowDuration,
+                        Math.round(pct * totalSeconds - windowDuration / 2)
+                      ));
+                      setFormData((prev) => ({ ...prev, startTime: newStart }));
+                    })}
+                  />
+                  <div
+                    className="preview-window-thumb preview-window-thumb-start"
+                    style={{ left: `${windowStartPct}%` }}
+                    onPointerDown={startDrag((pct) => {
+                      handleStartChange(String(Math.round(pct * totalSeconds)));
+                    })}
+                  />
+                  <div
+                    className="preview-window-thumb preview-window-thumb-end"
+                    style={{ left: `${windowEndPct}%` }}
+                    onPointerDown={startDrag((pct) => {
+                      handleEndChange(String(Math.round(pct * totalSeconds)));
+                    })}
+                  />
+                </div>
+                <div className="preview-window-labels">
+                  <span>▶ {formatTime(windowStart)}</span>
+                  <span className="preview-window-length">{windowDuration}s</span>
+                  <span>⏹ {formatTime(windowEnd)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="youtube-window-row">
+                  <div className="youtube-window-field">
+                    <label htmlFor="yt-start">Start at (seconds)</label>
+                    <input
+                      id="yt-start"
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      value={formData.startTime || 0}
+                      onChange={(e) => {
+                        stopPreview();
+                        setFormData({ ...formData, startTime: Math.max(0, Number(e.target.value) || 0) });
+                      }}
+                      className="input"
+                    />
+                  </div>
+                  <div className="youtube-window-field">
+                    <label htmlFor="yt-length">Length (seconds)</label>
+                    <input
+                      id="yt-length"
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      value={formData.duration || WINDOW_SECONDS}
+                      onChange={(e) => {
+                        stopPreview();
+                        setFormData({ ...formData, duration: Math.max(1, Number(e.target.value) || WINDOW_SECONDS) });
+                      }}
+                      className="input"
+                    />
+                  </div>
+                </div>
+                <small className="form-hint">
+                  {ytDuration === null
+                    ? 'Reading the video length…'
+                    : 'Couldn\'t read the video length — set the start and length manually.'}
+                </small>
+              </>
+            )}
+            {((isApple && formData.previewUrl) || (isYouTube && formData.songVideoId)) && (
               <button
                 type="button"
                 className={`preview-play-btn${previewing ? ' is-playing' : ''}`}
@@ -558,50 +732,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
                 {previewing ? '⏹' : '▶'} Preview section
               </button>
             )}
-          </div>
-        )}
-
-        {isYouTube && (
-          <div className="form-group preview-window-group">
-            <label>Walk-up window (start &amp; length)</label>
-            <div className="youtube-window-row">
-              <div className="youtube-window-field">
-                <label htmlFor="yt-start">Start at (seconds)</label>
-                <input
-                  id="yt-start"
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  step="1"
-                  value={formData.startTime || 0}
-                  onChange={(e) => {
-                    stopPreview();
-                    setFormData({ ...formData, startTime: Math.max(0, Number(e.target.value) || 0) });
-                  }}
-                  className="input"
-                />
-              </div>
-              <div className="youtube-window-field">
-                <label htmlFor="yt-length">Length (seconds)</label>
-                <input
-                  id="yt-length"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  value={formData.duration || 20}
-                  onChange={(e) => {
-                    stopPreview();
-                    setFormData({ ...formData, duration: Math.max(1, Number(e.target.value) || 20) });
-                  }}
-                  className="input"
-                />
-              </div>
-            </div>
-            <small className="form-hint">
-              The exact second the song starts and how long it plays. The full YouTube video
-              is available, so any part of the song can be the walk-up.
-            </small>
           </div>
         )}
 
