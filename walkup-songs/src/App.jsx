@@ -68,7 +68,10 @@ function App() {
   // and cached in KV, so replays are free.
   useEffect(() => {
     if (players.length === 0) return;
-    preloadAnnouncements(players.map((p) => p.pronounced || p.name));
+    preloadAnnouncements(players.map((p) => ({
+      name: p.pronounced || p.name,
+      number: p.number || ''
+    })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [players.length]);
 
@@ -405,7 +408,10 @@ function App() {
     // Announce the player's name first, then play the walk-up song.
     // If the announcement is unavailable (no key, quota, network), the
     // song plays immediately.
-    playAnnouncement(targetPlayer.pronounced || targetPlayer.name).then(() => startSong());
+    playAnnouncement(
+      targetPlayer.pronounced || targetPlayer.name,
+      targetPlayer.number
+    ).then(() => startSong());
   };
 
   const handlePlay = () => {

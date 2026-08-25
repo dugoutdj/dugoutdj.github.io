@@ -1,10 +1,11 @@
-// Announcer client — plays "Now batting, <name>!" before a walk-up song.
+// Announcer client — plays "Now batting, number <jersey>, <name>!"
+// before a walk-up song.
 //
 // The audio is generated server-side (functions/api/announce.js) so the
-// ElevenLabs API key never touches the browser. Each player name is
+// ElevenLabs API key never touches the browser. Each name+number combo is
 // generated once and cached in KV, so replays are instant and free.
 //
-// playAnnouncement(name):
+// playAnnouncement(name, number):
 //   - fetches the announcement MP3 (cached client-side in memory)
 //   - plays it on a shared hidden <audio> element
 //   - resolves true if it played to completion, false if it was skipped
@@ -20,8 +21,11 @@ let audioEl = null;
 const urlCache = new Map(); // normalized name -> object URL
 const pending = new Map();  // normalized name -> in-flight fetch promise
 
-function cacheKey(name) {
-  return String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+function cacheKey(name, number) {
+  const clean = String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const num = String(number || '').trim();
+  // Include the jersey number so changing it generates a fresh clip.
+  return num ? `${num}|${clean}` : clean;
 }
 
 // Get the announcement audio for a name, preferring (in order): the
@@ -29,8 +33,8 @@ function cacheKey(name) {
 // When fetched from the server, the clip is saved locally so it never has
 // to be regenerated or re-downloaded. Changing the pronounced name changes
 // the key, which naturally produces (and saves) a fresh clip.
-async function fetchAnnouncementUrl(name) {
-  const key = cacheKey(name);
+async function fetchAnnouncementUrl(name, number) {
+  const key = cacheKey(name, number);
   if (!key) return null;
   if (urlCache.has(key)) return urlCache.get(key);
   if (pending.has(key)) return pending.get(key);
@@ -47,7 +51,9 @@ async function fetchAnnouncementUrl(name) {
     } catch { /* IndexedDB unavailable — fall through to server */ }
 
     // 2) Server (KV-cached server-side too). Save the result locally.
-    const res = await fetch(`/api/announce?name=${encodeURIComponent(name)}`);
+    const qs = new URLSearchParams({ name });
+    if (number) qs.set('number', String(number).trim());
+    const res = await fetch(`/api/announce?${qs.toString()}`);
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob || blob.size === 0) return null;
@@ -67,13 +73,13 @@ async function fetchAnnouncementUrl(name) {
 // URL if this name was already fetched (or preloaded), else null. Used
 // by the play flow so the audio element can start inside the user's tap
 // gesture — required for reliable autoplay on iOS.
-export function getAnnouncementUrl(name) {
-  const key = cacheKey(name);
+export function getAnnouncementUrl(name, number) {
+  const key = cacheKey(name, number);
   return urlCache.has(key) ? urlCache.get(key) : null;
 }
 
 // Play the announcement. Resolves true on completion, false on any skip.
-export function playAnnouncement(name) {
+export function playAnnouncement(name, number) {
   return new Promise((resolve) => {
     if (!name) return resolve(false);
 
@@ -84,7 +90,7 @@ export function playAnnouncement(name) {
       resolve(ok);
     };
 
-    fetchAnnouncementUrl(name)
+    fetchAnnouncementUrl(name, number)
       .then((url) => {
         if (!url) return done(false);
         if (!audioEl) {
@@ -118,11 +124,19 @@ export function stopAnnouncement() {
 }
 
 // Preload the announcement for every player on the roster so the first
-// tap in a game is instant. Returns a promise that resolves when all
-// queued fetches settle (never rejects).
-export function preloadAnnouncements(names) {
-  const unique = [...new Set((names || []).filter(Boolean).map(cacheKey))];
+// tap in a game is instant. Accepts an array of player-like objects
+// ({ name, number } — name should already be the pronounced name).
+// Returns a promise that resolves when all queued fetches settle.
+export function preloadAnnouncements(players) {
+  const seen = new Set();
+  const unique = [];
+  for (const p of players || []) {
+    const key = cacheKey(p.name, p.number);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ name: p.name, number: p.number });
+  }
   return Promise.allSettled(
-    unique.map((n) => fetchAnnouncementUrl(n))
+    unique.map((p) => fetchAnnouncementUrl(p.name, p.number))
   );
 }

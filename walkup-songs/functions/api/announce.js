@@ -22,6 +22,10 @@ const VOICE_ID = 'mYTliPiFsycwxhxWzfA0';
 const MODEL_ID = 'eleven_flash_v2_5';
 const OUTPUT_FORMAT = 'mp3_22050_32';
 const CACHE_TTL = 90 * 24 * 3600; // 90 days, same as teams
+// 0.85 = about 15% slower than the default 1.0.
+const SPEED = 0.85;
+// Bumped so previously cached clips (old wording/speed) regenerate once.
+const CACHE_PREFIX = 'announce:v2:';
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -34,14 +38,17 @@ function json(body, status = 200, extraHeaders = {}) {
   });
 }
 
-// Normalize a player name into a safe, stable cache key and the spoken
-// line. Keeps the name short so it costs few credits.
-function makeLine(name) {
+// Normalize a player name + jersey number into a safe, stable cache key
+// and the spoken line. Keeps both short so it costs few credits.
+function makeLine(name, number) {
   const clean = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-  return {
-    line: `Now batting, ${clean}!`,
-    key: clean.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown'
-  };
+  const num = String(number || '').trim().slice(0, 6);
+  const line = num
+    ? `Now batting, number ${num}, ${clean}!`
+    : `Now batting, ${clean}!`;
+  const nameKey = clean.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown';
+  const key = num ? `n${num}-${nameKey}` : nameKey;
+  return { line, key };
 }
 
 function audioResponse(buffer, extraHeaders = {}) {
@@ -62,12 +69,13 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const name = (url.searchParams.get('name') || '').trim();
+  const number = (url.searchParams.get('number') || '').trim();
 
   if (!name) {
     return json({ error: 'Missing name parameter' }, 400);
   }
-  const { line, key } = makeLine(name);
-  const cacheKey = `announce:${key}`;
+  const { line, key } = makeLine(name, number);
+  const cacheKey = `${CACHE_PREFIX}${key}`;
 
   // 1) KV cache — the big free-plan saver. Generated once per name.
   if (env.TEAMS) {
@@ -105,7 +113,8 @@ export async function onRequestGet(context) {
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.75,
-            style: 0
+            style: 0,
+            speed: SPEED
           }
         })
       }

@@ -300,7 +300,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     stopPreview();
     setAnnouncePreviewing(true);
     // playAnnouncement resolves when the clip finishes (or is skipped).
-    playAnnouncement(name).then(() => setAnnouncePreviewing(false));
+    playAnnouncement(name, formData.number).then(() => setAnnouncePreviewing(false));
   };
 
   const isApple = formData.songSource === 'apple';
