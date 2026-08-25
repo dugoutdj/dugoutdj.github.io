@@ -12,6 +12,10 @@ const WINDOW_SECONDS = 10; // default window length
 const MIN_WINDOW = 5;
 const MAX_WINDOW = 15;
 const MAX_START = PREVIEW_SECONDS - MIN_WINDOW;
+// YouTube songs can be several minutes long. When the exact video length
+// can't be read (offline, bot check), the slider track still spans this
+// generous default so any portion of the song can be selected.
+const YT_FALLBACK_SECONDS = 300; // 5 minutes
 
 export default function PlayerForm({ player, onSave, onCancel, songOnly = false }) {
   const [formData, setFormData] = useState({
@@ -50,7 +54,9 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   // track at the 30s preview; YouTube spans the full video.
   const isApple = formData.songSource === 'apple';
   const isYouTube = !isApple && !!formData.songVideoId;
-  const totalSeconds = isApple ? PREVIEW_SECONDS : (ytDuration || 0);
+  const totalSeconds = isApple
+    ? PREVIEW_SECONDS
+    : ((ytDuration && ytDuration > 0) ? ytDuration : YT_FALLBACK_SECONDS);
   const maxStart = Math.max(0, totalSeconds - MIN_WINDOW);
   // Set while a handle is being dragged, so the wrapper's click-to-move
   // doesn't fire from the click that ends a drag.
@@ -474,9 +480,9 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   };
 
   // Window geometry over the source's total length (30s Apple preview, or
-  // the full YouTube video). For YouTube, the slider only appears once the
-  // length is known; until then the numeric inputs below are used.
-  const sliderUsable = isApple || (isYouTube && (ytDuration || 0) > 0);
+  // the full YouTube video). The slider is always shown for both sources;
+  // for YouTube it spans the video length when known, or a generous 5-minute
+  // fallback while it loads / if it can't be read.
   const windowStart = Math.min(formData.startTime || 0, Math.max(0, maxStart));
   const windowDuration = Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, formData.duration || WINDOW_SECONDS));
   const windowEnd = Math.min(windowStart + windowDuration, totalSeconds);
@@ -621,103 +627,67 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
         {(isApple || isYouTube) && (
           <div className="form-group preview-window-group">
             <label>Pick the walk-up window (5–15s)</label>
-            {sliderUsable ? (
-              <>
+            <>
+              <div
+                className="preview-window-track"
+                ref={trackRef}
+                onPointerDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  stopPreview();
+                  const rect = trackRef.current.getBoundingClientRect();
+                  const pct = (e.clientX - rect.left) / rect.width;
+                  const center = pct * totalSeconds;
+                  const start = Math.max(0, Math.min(
+                    totalSeconds - windowDuration,
+                    Math.round(center - windowDuration / 2)
+                  ));
+                  setFormData((prev) => ({ ...prev, startTime: start, duration: windowDuration }));
+                }}
+              >
                 <div
-                  className="preview-window-track"
-                  ref={trackRef}
-                  onPointerDown={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    stopPreview();
-                    const rect = trackRef.current.getBoundingClientRect();
-                    const pct = (e.clientX - rect.left) / rect.width;
-                    const center = pct * totalSeconds;
-                    const start = Math.max(0, Math.min(
-                      totalSeconds - windowDuration,
-                      Math.round(center - windowDuration / 2)
-                    ));
-                    setFormData((prev) => ({ ...prev, startTime: start, duration: windowDuration }));
+                  className="preview-window-fill"
+                  style={{
+                    left: `${windowStartPct}%`,
+                    width: `${windowEndPct - windowStartPct}%`
                   }}
-                >
-                  <div
-                    className="preview-window-fill"
-                    style={{
-                      left: `${windowStartPct}%`,
-                      width: `${windowEndPct - windowStartPct}%`
-                    }}
-                    onPointerDown={startDrag((pct) => {
-                      stopPreview();
-                      const newStart = Math.max(0, Math.min(
-                        totalSeconds - windowDuration,
-                        Math.round(pct * totalSeconds - windowDuration / 2)
-                      ));
-                      setFormData((prev) => ({ ...prev, startTime: newStart }));
-                    })}
-                  />
-                  <div
-                    className="preview-window-thumb preview-window-thumb-start"
-                    style={{ left: `${windowStartPct}%` }}
-                    onPointerDown={startDrag((pct) => {
-                      handleStartChange(String(Math.round(pct * totalSeconds)));
-                    })}
-                  />
-                  <div
-                    className="preview-window-thumb preview-window-thumb-end"
-                    style={{ left: `${windowEndPct}%` }}
-                    onPointerDown={startDrag((pct) => {
-                      handleEndChange(String(Math.round(pct * totalSeconds)));
-                    })}
-                  />
-                </div>
-                <div className="preview-window-labels">
-                  <span>▶ {formatTime(windowStart)}</span>
-                  <span className="preview-window-length">{windowDuration}s</span>
-                  <span>⏹ {formatTime(windowEnd)}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="youtube-window-row">
-                  <div className="youtube-window-field">
-                    <label htmlFor="yt-start">Start at (seconds)</label>
-                    <input
-                      id="yt-start"
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="1"
-                      value={formData.startTime || 0}
-                      onChange={(e) => {
-                        stopPreview();
-                        setFormData({ ...formData, startTime: Math.max(0, Number(e.target.value) || 0) });
-                      }}
-                      className="input"
-                    />
-                  </div>
-                  <div className="youtube-window-field">
-                    <label htmlFor="yt-length">Length (seconds)</label>
-                    <input
-                      id="yt-length"
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      step="1"
-                      value={formData.duration || WINDOW_SECONDS}
-                      onChange={(e) => {
-                        stopPreview();
-                        setFormData({ ...formData, duration: Math.max(1, Number(e.target.value) || WINDOW_SECONDS) });
-                      }}
-                      className="input"
-                    />
-                  </div>
-                </div>
+                  onPointerDown={startDrag((pct) => {
+                    stopPreview();
+                    const newStart = Math.max(0, Math.min(
+                      totalSeconds - windowDuration,
+                      Math.round(pct * totalSeconds - windowDuration / 2)
+                    ));
+                    setFormData((prev) => ({ ...prev, startTime: newStart }));
+                  })}
+                />
+                <div
+                  className="preview-window-thumb preview-window-thumb-start"
+                  style={{ left: `${windowStartPct}%` }}
+                  onPointerDown={startDrag((pct) => {
+                    handleStartChange(String(Math.round(pct * totalSeconds)));
+                  })}
+                />
+                <div
+                  className="preview-window-thumb preview-window-thumb-end"
+                  style={{ left: `${windowEndPct}%` }}
+                  onPointerDown={startDrag((pct) => {
+                    handleEndChange(String(Math.round(pct * totalSeconds)));
+                  })}
+                />
+              </div>
+              <div className="preview-window-labels">
+                <span>▶ {formatTime(windowStart)}</span>
+                <span className="preview-window-length">{windowDuration}s</span>
+                <span>⏹ {formatTime(windowEnd)}</span>
+              </div>
+              {isYouTube && !(ytDuration && ytDuration > 0) && (
                 <small className="form-hint">
                   {ytDuration === null
                     ? 'Reading the video length…'
-                    : 'Couldn\'t read the video length — set the start and length manually.'}
+                    : "Couldn't read the video length — the slider shows 0–5:00; drag to pick any 15s window."}
                 </small>
-              </>
-            )}
+              )}
+            </>
+
             {((isApple && formData.previewUrl) || (isYouTube && formData.songVideoId)) && (
               <button
                 type="button"
