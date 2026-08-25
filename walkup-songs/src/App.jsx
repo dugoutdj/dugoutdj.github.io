@@ -382,7 +382,7 @@ function App() {
         const updates = {};
         remote.players.forEach((rp) => {
           const local = players.find((p) => String(p.id) === String(rp.id));
-          const sig = (p) => [p.songTitle, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|');
+          const sig = (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|');
           if (local && sig(local) !== sig(rp)) updates[rp.id] = rp;
         });
         if (!cancelled) setPendingUpdates(updates);
@@ -394,6 +394,57 @@ function App() {
     const timer = setInterval(check, 30000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [sharedTeamId, playerSig]);
+
+  // Apply parent song updates to the local roster. Parents often fine-tune a
+  // song several times, so we re-fetch the shared roster at click time and
+  // apply each player's most recent version — one click always lands the
+  // latest update, never a stale polled snapshot. Falls back to the last
+  // polled snapshot if the network hiccups.
+  const handleApplyUpdates = async () => {
+    if (!currentTeam) return;
+    let toApply = pendingUpdates;
+    if (sharedTeamId) {
+      try {
+        const remote = await fetchTeam(sharedTeamId);
+        if (remote?.players) {
+          const fresh = {};
+          remote.players.forEach((rp) => {
+            const local = players.find((p) => String(p.id) === String(rp.id));
+            if (!local) return;
+            const sig = (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|');
+            if (sig(local) !== sig(rp)) fresh[rp.id] = rp;
+          });
+          if (Object.keys(fresh).length > 0) toApply = fresh;
+        }
+      } catch {
+        // Transient network error — fall back to the last polled snapshot.
+      }
+    }
+    let applied = 0;
+    Object.values(toApply).forEach((rp) => {
+      // Remote ids are strings (JSON round-trip); match the local player by
+      // string comparison to get its real id.
+      const local = players.find((p) => String(p.id) === String(rp.id));
+      if (!local) return;
+      storage.updatePlayer(currentTeam.id, local.id, {
+        songTitle: rp.songTitle,
+        pronounced: rp.pronounced || rp.name || '',
+        previewUrl: rp.previewUrl,
+        artworkUrl: rp.artworkUrl,
+        appleTrackId: rp.appleTrackId,
+        songVideoId: rp.songVideoId,
+        songThumbnail: rp.songThumbnail,
+        startTime: rp.startTime,
+        duration: rp.duration,
+        songSource: rp.songSource || 'apple'
+      });
+      applied += 1;
+    });
+    setPendingUpdates({});
+    if (applied > 0) {
+      setShareStatus(`Applied ${applied} parent update${applied === 1 ? '' : 's'}. Re-share the link so everyone has the latest roster.`);
+    }
+  };
 
   const handlePlayPlayer = (index) => {
     if (!players[index] || !songKey(players[index])) return;
@@ -631,28 +682,7 @@ function App() {
                   </span>
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      Object.values(pendingUpdates).forEach((rp) => {
-                        if (!currentTeam) return;
-                        // Remote ids are strings (JSON round-trip); match the
-                        // local player by string comparison to get its real id.
-                        const local = players.find(
-                          (p) => String(p.id) === String(rp.id)
-                        );
-                        if (!local) return;
-                        storage.updatePlayer(currentTeam.id, local.id, {
-                          songTitle: rp.songTitle,
-                          previewUrl: rp.previewUrl,
-                          artworkUrl: rp.artworkUrl,
-                          appleTrackId: rp.appleTrackId,
-                          startTime: rp.startTime,
-                          duration: rp.duration,
-                          songSource: rp.songSource || 'apple'
-                        });
-                      });
-                      setPendingUpdates({});
-                      setShareStatus('Applied parent updates. Re-share the link so everyone has the latest roster.');
-                    }}
+                    onClick={handleApplyUpdates}
                   >
                     Apply updates
                   </button>
