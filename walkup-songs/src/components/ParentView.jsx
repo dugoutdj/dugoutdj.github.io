@@ -296,6 +296,7 @@ export default function ParentView({ teamId }) {
           <PlayerForm
             player={editingPlayer}
             songOnly
+            lockScroll={false}
             onSave={handleSave}
             onCancel={() => { stopPreview(); setEditingPlayer(null); }}
           />

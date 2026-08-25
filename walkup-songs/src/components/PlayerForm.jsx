@@ -49,7 +49,7 @@ const parseStartText = (text) => {
   return parseInt(t, 10);
 };
 
-export default function PlayerForm({ player, onSave, onCancel, songOnly = false }) {
+export default function PlayerForm({ player, onSave, onCancel, songOnly = false, lockScroll = true }) {
   const [formData, setFormData] = useState({
     name: '',
     pronounced: '',
@@ -141,13 +141,15 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
       if (e.key === 'Escape') onCancel();
     };
     window.addEventListener('keydown', onKey);
+    // Lock page scroll only when rendered as a modal (coach side). The
+    // parent page renders the form inline, where the page itself must scroll.
     const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (lockScroll) document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      if (lockScroll) document.body.style.overflow = prevOverflow;
     };
-  }, [onCancel]);
+  }, [onCancel, lockScroll]);
 
   // Debounced live search against the catalog. The 700ms debounce keeps
   // fast typing to a single request (per-keystroke bursts tripped Apple's
