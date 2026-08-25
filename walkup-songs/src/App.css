@@ -205,6 +205,9 @@
    the link stays live for parents and returns on the next Share click. */
 .share-status {
   position: relative;
+  /* Reserve room on the right for the close button so wrapped status text
+     never slides underneath it. */
+  padding-right: 2rem;
 }
 
 .share-dismiss-btn {
