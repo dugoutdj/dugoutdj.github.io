@@ -41,7 +41,8 @@ function sanitizePlayer(p) {
     songThumbnail: String(p.songThumbnail ?? ''),
     startTime: Number(p.startTime) || 0,
     duration: Number(p.duration) || 10,
-    songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : '')
+    songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : ''),
+    updatedAt: Number(p.updatedAt) || Date.now()
   };
 }
 

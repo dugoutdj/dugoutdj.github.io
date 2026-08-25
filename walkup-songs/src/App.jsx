@@ -279,6 +279,12 @@ function App() {
   const handleSavePlayer = (playerData) => {
     if (!currentTeam) return;
 
+    // The coach just touched this player's song, so their version is now the
+    // authoritative one. Record the edit time so a parent's OLDER submission
+    // (already in the shared roster) is no longer offered as an update to
+    // apply back over the coach's newer edit.
+    playerData = { ...playerData, updatedAt: Date.now() };
+
     const oldKey = editingPlayer ? songKey(editingPlayer) : null;
 
     if (editingPlayer) {
@@ -389,10 +395,28 @@ function App() {
     }
   };
 
+  // A remote player is a pending update when its song differs from the local
+  // copy AND it is not older than the coach's local edit. The coach's own
+  // edits are authoritative, so a parent's EARLIER submission must never be
+  // offered as an update that would revert the coach's newer change. Only a
+  // parent update strictly NEWER than the coach's last local touch wins.
+  // When either side lacks a timestamp (legacy data), fall back to the plain
+  // content diff so existing detection keeps working.
+  const songSig = useCallback(
+    (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|'),
+    []
+  );
+  const isPending = useCallback((local, rp) => {
+    if (songSig(local) === songSig(rp)) return false;
+    const lT = Number(local.updatedAt || 0);
+    const rT = Number(rp.updatedAt || 0);
+    return !(lT && rT && lT >= rT);
+  }, [songSig]);
+
   // Poll the shared roster every 30s so the coach sees parent song updates.
   // `players` is a fresh array each render, so key the effect on a stable
   // signature string instead to avoid re-running the fetch every render.
-  const playerSig = players.map((p) => `${p.id}:${p.songTitle}:${p.startTime}:${p.duration}:${p.previewUrl}`).join('|');
+  const playerSig = players.map((p) => `${p.id}:${p.updatedAt}:${p.songTitle}:${p.startTime}:${p.duration}:${p.previewUrl}`).join('|');
   useEffect(() => {
     if (!sharedTeamId) return undefined;
     let cancelled = false;
@@ -403,8 +427,7 @@ function App() {
         const updates = {};
         remote.players.forEach((rp) => {
           const local = players.find((p) => String(p.id) === String(rp.id));
-          const sig = (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|');
-          if (local && sig(local) !== sig(rp)) updates[rp.id] = rp;
+          if (local && isPending(local, rp)) updates[rp.id] = rp;
         });
         if (!cancelled) setPendingUpdates(updates);
       } catch {
@@ -414,7 +437,7 @@ function App() {
     check();
     const timer = setInterval(check, 30000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [sharedTeamId, playerSig]);
+  }, [sharedTeamId, playerSig, isPending]);
 
   // Apply parent song updates to the local roster. Parents often fine-tune a
   // song several times, so we re-fetch the shared roster at click time and
@@ -431,9 +454,7 @@ function App() {
           const fresh = {};
           remote.players.forEach((rp) => {
             const local = players.find((p) => String(p.id) === String(rp.id));
-            if (!local) return;
-            const sig = (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|');
-            if (sig(local) !== sig(rp)) fresh[rp.id] = rp;
+            if (local && isPending(local, rp)) fresh[rp.id] = rp;
           });
           if (Object.keys(fresh).length > 0) toApply = fresh;
         }
@@ -457,7 +478,8 @@ function App() {
         songThumbnail: rp.songThumbnail,
         startTime: rp.startTime,
         duration: rp.duration,
-        songSource: rp.songSource || 'apple'
+        songSource: rp.songSource || 'apple',
+        updatedAt: Date.now()
       });
       applied += 1;
     });

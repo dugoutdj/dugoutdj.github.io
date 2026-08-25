@@ -62,6 +62,7 @@ export const useLocalStorage = () => {
       artworkUrl: player.artworkUrl || '',
       startTime: player.startTime || 0,
       duration: player.duration || 30,
+      updatedAt: player.updatedAt || Date.now(),
       order: player.order || 0
     };
 
