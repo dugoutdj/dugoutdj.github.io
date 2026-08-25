@@ -330,6 +330,20 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
           </div>
         )}
 
+
+        {!songOnly && (
+          <div className="form-group">
+            <label>Jersey Number</label>
+            <input
+              type="text"
+              value={formData.number}
+              onChange={(e) => setFormData({ ...formData, number: e.target.value })}
+              className="input"
+              placeholder="Optional"
+            />
+          </div>
+        )}
+
         <div className="form-group">
           <label>Pronounced</label>
           <input
@@ -352,19 +366,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
             {announcePreviewing ? '⏹ Stop preview' : '🔊 Preview announcement'}
           </button>
         </div>
-
-        {!songOnly && (
-          <div className="form-group">
-            <label>Jersey Number</label>
-            <input
-              type="text"
-              value={formData.number}
-              onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-              className="input"
-              placeholder="Optional"
-            />
-          </div>
-        )}
 
         <div className="form-group">
           <label>Song</label>
