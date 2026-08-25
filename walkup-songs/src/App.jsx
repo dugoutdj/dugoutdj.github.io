@@ -62,18 +62,20 @@ function App() {
 
   const currentTeam = storage.currentTeam;
   const players = currentTeam?.players || [];
+  // Per-team toggle for the "Now batting..." announcer intro (default on).
+  const announcerEnabled = currentTeam?.announcerEnabled !== false;
 
   // Preload the announcer clips for the whole roster so the first tap
   // on game day is instant. Each name is generated once server-side
   // and cached in KV, so replays are free.
   useEffect(() => {
-    if (players.length === 0) return;
+    if (players.length === 0 || !announcerEnabled) return;
     preloadAnnouncements(players.map((p) => ({
       name: p.pronounced || p.name,
       number: p.number || ''
     })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players.length]);
+  }, [players.length, announcerEnabled]);
 
   // Initialize first team if none exists
   useEffect(() => {
@@ -408,10 +410,15 @@ function App() {
     // Announce the player's name first, then play the walk-up song.
     // If the announcement is unavailable (no key, quota, network), the
     // song plays immediately.
-    playAnnouncement(
-      targetPlayer.pronounced || targetPlayer.name,
-      targetPlayer.number
-    ).then(() => startSong());
+    if (announcerEnabled) {
+      playAnnouncement(
+        targetPlayer.pronounced || targetPlayer.name,
+        targetPlayer.number
+      ).then(() => startSong());
+    } else {
+      // Announcer toggled off - skip straight to the walk-up song.
+      startSong();
+    }
   };
 
   const handlePlay = () => {
@@ -455,6 +462,11 @@ function App() {
     if (currentPlayerIndex !== null) {
       handlePlayPlayer(currentPlayerIndex);
     }
+  };
+
+  const handleToggleAnnouncer = () => {
+    if (!currentTeam) return;
+    storage.updateTeam(currentTeam.id, { announcerEnabled: !announcerEnabled });
   };
 
   const handleRenameTeam = (teamId, newName) => {
@@ -511,6 +523,18 @@ function App() {
         )}
 
         <div className="app-actions">
+          {currentTeam && (
+            <button
+              className={`btn btn-sm announcer-toggle${announcerEnabled ? '' : ' is-off'}`}
+              onClick={handleToggleAnnouncer}
+              title={announcerEnabled ? 'Announcer intro is ON - tap to turn off' : 'Announcer intro is OFF - tap to turn on'}
+              aria-pressed={announcerEnabled}
+              aria-label="Toggle announcer intro"
+            >
+              {announcerEnabled ? '🔊' : '🔇'}
+              <span className="announcer-toggle-label">Announcer</span>
+            </button>
+          )}
           <button
             className="btn btn-secondary btn-sm share-btn"
             onClick={() => setShowShareDialog(true)}
