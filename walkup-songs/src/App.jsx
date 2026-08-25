@@ -269,16 +269,18 @@ function App() {
     setShowPlayerForm(false);
     setEditingPlayer(null);
 
-    // Auto-save the song locally as soon as a playable song is set, so it's
-    // ready for offline playback without tapping anything. On edit, re-save
-    // when the song changed OR the walk-up window moved (the saved clip is
-    // trimmed to the window, so it must be cut again).
+    // Auto-save the song locally as soon as a playable Apple song is set, so
+    // it's ready for offline playback without tapping anything. YouTube songs
+    // are streamed from YouTube and are intentionally NOT saved locally. On
+    // edit, re-save when the song changed OR the walk-up window moved (the
+    // saved clip is trimmed to the window, so it must be cut again).
     const newKey = songKey(playerData);
+    const isAppleSong = playerData.songSource === 'apple';
     const windowChanged =
       editingPlayer &&
       (Number(playerData.startTime) !== Number(editingPlayer.startTime) ||
         Number(playerData.duration) !== Number(editingPlayer.duration));
-    if (newKey && (!oldKey || oldKey !== newKey || windowChanged)) {
+    if (isAppleSong && newKey && (!oldKey || oldKey !== newKey || windowChanged)) {
       // Drop the stale copy first so the re-save isn't skipped as "already saved".
       if (oldKey && oldKey === newKey && windowChanged && offlineSongs[newKey]) {
         handleRemoveOffline(newKey);
@@ -339,6 +341,8 @@ function App() {
           previewUrl: p.previewUrl || '',
           artworkUrl: p.artworkUrl || '',
           appleTrackId: p.appleTrackId || '',
+          songVideoId: p.songVideoId || '',
+          songThumbnail: p.songThumbnail || '',
           startTime: p.startTime || 0,
           duration: p.duration || 10,
           songSource: p.songSource || ''
@@ -378,7 +382,7 @@ function App() {
         const updates = {};
         remote.players.forEach((rp) => {
           const local = players.find((p) => String(p.id) === String(rp.id));
-          const sig = (p) => [p.songTitle, p.startTime, p.duration, p.previewUrl].join('|');
+          const sig = (p) => [p.songTitle, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|');
           if (local && sig(local) !== sig(rp)) updates[rp.id] = rp;
         });
         if (!cancelled) setPendingUpdates(updates);
@@ -413,8 +417,7 @@ function App() {
     if (announcerEnabled) {
       playAnnouncement(
         targetPlayer.pronounced || targetPlayer.name,
-        targetPlayer.number,
-        { overlap: 0.25 }
+        targetPlayer.number
       ).then(() => startSong());
     } else {
       // Announcer toggled off - skip straight to the walk-up song.

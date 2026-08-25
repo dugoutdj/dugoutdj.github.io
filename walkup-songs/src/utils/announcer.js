@@ -10,7 +10,7 @@
 //   - plays it on a shared hidden <audio> element
 //   - resolves true if it played to completion, false if it was skipped
 //     (no key configured, quota hit, network error, or playback blocked)
-//   - always resolves — callers play the song regardless
+//   - always resolves — the caller starts the song after it finishes
 
 import {
   getAnnouncement,
@@ -78,13 +78,10 @@ export function getAnnouncementUrl(name, number) {
   return urlCache.has(key) ? urlCache.get(key) : null;
 }
 
-// Play the announcement. Resolves true when the clip has played through
-// `overlap` of its tail (default 0 = full length), false on any skip.
-// Passing overlap: 0.25 lets the walk-up song start while the last 25%
-// of the announcement still plays. The announcement tail keeps playing
-// in the background and ends naturally.
-export function playAnnouncement(name, number, options = {}) {
-  const overlap = Math.min(1, Math.max(0, Number(options.overlap) || 0));
+// Play the announcement. Resolves true when the clip has played through,
+// false on any skip. The caller starts the walk-up song only after this
+// resolves, so the announcement always completes before the song begins.
+export function playAnnouncement(name, number) {
   return new Promise((resolve) => {
     if (!name) return resolve(false);
 
@@ -110,22 +107,12 @@ export function playAnnouncement(name, number, options = {}) {
         const finish = (ok) => {
           if (finished) return;
           finished = true;
-          audio.ontimeupdate = null;
+          audio.onended = null;
+          audio.onerror = null;
           done(ok);
         };
         audio.onended = () => finish(true);
         audio.onerror = () => finish(false);
-        if (overlap > 0) {
-          // Resolve once the clip is (1 - overlap) done so the song can
-          // start while the announcement's tail still plays.
-          audio.ontimeupdate = () => {
-            const d = audio.duration;
-            if (d && Number.isFinite(d) && d > 0 &&
-                audio.currentTime >= d * (1 - overlap)) {
-              finish(true);
-            }
-          };
-        }
         const playPromise = audio.play();
         if (playPromise && playPromise.catch) {
           playPromise.catch(() => finish(false));

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { formatTime } from '../utils/youtube';
+import { formatTime, extractVideoId, fetchVideoInfo } from '../utils/youtube';
 import { searchTracks } from '../utils/previewDownloader';
 import { mediaProxy } from '../utils/media';
 import { playAnnouncement, stopAnnouncement } from '../utils/announcer';
@@ -33,6 +33,10 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   const [appleResults, setAppleResults] = useState([]);
   const [appleSearching, setAppleSearching] = useState(false);
   const [appleError, setAppleError] = useState(null);
+  // YouTube URL paste (the full-song alternative to the 30s Apple preview).
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeError, setYoutubeError] = useState(null);
   // Set while a handle is being dragged, so the wrapper's click-to-move
   // doesn't fire from the click that ends a drag.
   const draggingRef = useRef(false);
@@ -148,6 +152,44 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
     }));
     setAppleQuery('');
     setAppleResults([]);
+  };
+
+  // Load a pasted YouTube link: extract the video id, fetch its title and
+  // thumbnail, and store it as the player's song. Parents/coaches pick the
+  // exact walk-up window with the start/length inputs below the preview.
+  const handleLoadYouTube = async () => {
+    const videoId = extractVideoId(youtubeUrl.trim());
+    if (!videoId) {
+      setYoutubeError("That doesn't look like a valid YouTube link.");
+      return;
+    }
+    setYoutubeLoading(true);
+    setYoutubeError(null);
+    try {
+      const info = await fetchVideoInfo(videoId);
+      if (!info) {
+        setYoutubeError("Couldn't load that video \u2014 check the link and try again.");
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        songSource: 'youtube',
+        songUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        songVideoId: videoId,
+        songTitle: info.title || prev.songTitle,
+        songThumbnail: info.thumbnail || '',
+        appleTrackId: '',
+        previewUrl: '',
+        artworkUrl: '',
+        startTime: 0,
+        duration: 20
+      }));
+      setYoutubeUrl('');
+    } catch {
+      setYoutubeError("Couldn't load that video \u2014 check the link and try again.");
+    } finally {
+      setYoutubeLoading(false);
+    }
   };
 
   // Slide/resize the walk-up window within the 30-second preview.
@@ -304,6 +346,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
   };
 
   const isApple = formData.songSource === 'apple';
+  const isYouTube = !isApple && !!formData.songVideoId;
   const windowStart = isApple ? Math.min(formData.startTime || 0, MAX_START) : 0;
   const windowDuration = isApple
     ? Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, formData.duration || WINDOW_SECONDS))
@@ -412,11 +455,43 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
             </div>
           )}
 
-          {!isApple && formData.songVideoId && (
-            <div className="video-preview">
-              <small>⚠️ This player uses a YouTube video — re-pick the song below from Apple Music.</small>
+          {isYouTube && (
+            <div className="video-preview youtube-video-preview">
+              {formData.songThumbnail && (
+                <img src={formData.songThumbnail} alt={formData.songTitle} />
+              )}
+              <small>▶️ {formData.songTitle || 'YouTube video'}</small>
             </div>
           )}
+
+          <div className="form-divider"><span>OR</span></div>
+
+          <div className="form-group youtube-url-group">
+            <label>Paste a YouTube link</label>
+            <div className="youtube-url-row">
+              <input
+                type="text"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                className="input"
+                placeholder="https://www.youtube.com/watch?v=..."
+                disabled={youtubeLoading}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleLoadYouTube}
+                disabled={youtubeLoading || !youtubeUrl.trim()}
+              >
+                {youtubeLoading ? 'Loading…' : 'Load Song'}
+              </button>
+            </div>
+            {youtubeError && <small className="search-error-text">{youtubeError}</small>}
+            <small className="form-hint">
+              Pick the exact part of any full song on YouTube — paste the link, then set the
+              start and length below.
+            </small>
+          </div>
         </div>
 
         {isApple && (
@@ -486,6 +561,50 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
           </div>
         )}
 
+        {isYouTube && (
+          <div className="form-group preview-window-group">
+            <label>Walk-up window (start &amp; length)</label>
+            <div className="youtube-window-row">
+              <div className="youtube-window-field">
+                <label htmlFor="yt-start">Start at (seconds)</label>
+                <input
+                  id="yt-start"
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="1"
+                  value={formData.startTime || 0}
+                  onChange={(e) => {
+                    stopPreview();
+                    setFormData({ ...formData, startTime: Math.max(0, Number(e.target.value) || 0) });
+                  }}
+                  className="input"
+                />
+              </div>
+              <div className="youtube-window-field">
+                <label htmlFor="yt-length">Length (seconds)</label>
+                <input
+                  id="yt-length"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  value={formData.duration || 20}
+                  onChange={(e) => {
+                    stopPreview();
+                    setFormData({ ...formData, duration: Math.max(1, Number(e.target.value) || 20) });
+                  }}
+                  className="input"
+                />
+              </div>
+            </div>
+            <small className="form-hint">
+              The exact second the song starts and how long it plays. The full YouTube video
+              is available, so any part of the song can be the walk-up.
+            </small>
+          </div>
+        )}
+
         <div className="form-group">
           <label>Song Title (Optional)</label>
           <input
@@ -495,7 +614,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false 
             className="input"
             placeholder="e.g., Thunder - Imagine Dragons"
           />
-          <small className="form-hint">Auto-fills from Apple Music search</small>
+          <small className="form-hint">Auto-fills from Apple Music search or YouTube</small>
         </div>
 
 

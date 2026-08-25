@@ -26,7 +26,7 @@ export async function onRequestOptions() {
   }});
 }
 
-const SONG_FIELDS = ['songTitle', 'pronounced', 'previewUrl', 'artworkUrl', 'appleTrackId', 'startTime', 'duration', 'songSource'];
+const SONG_FIELDS = ['songTitle', 'pronounced', 'previewUrl', 'artworkUrl', 'appleTrackId', 'songVideoId', 'songThumbnail', 'startTime', 'duration', 'songSource'];
 
 export async function onRequestPut(context) {
   const { request, env, params } = context;
@@ -58,11 +58,17 @@ export async function onRequestPut(context) {
       }
     }
 
-    // Clamp the window to the 30s Apple preview / 5-15s model.
-    player.startTime = Math.max(0, Math.min(25, player.startTime));
-    player.duration = Math.max(5, Math.min(15, player.duration));
-    if (player.startTime + player.duration > 30) {
-      player.duration = 30 - player.startTime;
+    // Clamp the window only for Apple songs (30s preview / 5-15s model).
+    // YouTube songs keep their chosen start/length over the full video.
+    if (player.songSource === 'apple') {
+      player.startTime = Math.max(0, Math.min(25, player.startTime));
+      player.duration = Math.max(5, Math.min(15, player.duration));
+      if (player.startTime + player.duration > 30) {
+        player.duration = 30 - player.startTime;
+      }
+    } else {
+      player.startTime = Math.max(0, player.startTime);
+      player.duration = Math.max(1, player.duration);
     }
 
     team.updatedAt = Date.now();

@@ -37,9 +37,11 @@ function sanitizePlayer(p) {
     previewUrl: String(p.previewUrl ?? ''),
     artworkUrl: String(p.artworkUrl ?? ''),
     appleTrackId: String(p.appleTrackId ?? ''),
+    songVideoId: String(p.songVideoId ?? ''),
+    songThumbnail: String(p.songThumbnail ?? ''),
     startTime: Number(p.startTime) || 0,
     duration: Number(p.duration) || 10,
-    songSource: p.songSource === 'apple' ? 'apple' : ''
+    songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : '')
   };
 }
 

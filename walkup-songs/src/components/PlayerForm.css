@@ -388,3 +388,92 @@
   color: var(--text-secondary);
   border-color: var(--border-color);
 }
+
+/* OR divider between the Apple search and the YouTube URL paste */
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* YouTube link paste */
+.youtube-url-group {
+  margin-top: 0.25rem;
+}
+
+.youtube-url-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.youtube-url-row .input {
+  flex: 1;
+}
+
+.youtube-url-row .btn {
+  white-space: nowrap;
+}
+
+.youtube-video-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.youtube-video-preview img {
+  width: 44px;
+  height: 44px;
+  border-radius: 0.375rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Walk-up window inputs for YouTube songs (start + length) */
+.youtube-window-row {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.youtube-window-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.youtube-window-field label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.youtube-window-field .input {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .youtube-url-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .youtube-window-row {
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+}
