@@ -413,7 +413,8 @@ function App() {
     if (announcerEnabled) {
       playAnnouncement(
         targetPlayer.pronounced || targetPlayer.name,
-        targetPlayer.number
+        targetPlayer.number,
+        { overlap: 0.25 }
       ).then(() => startSong());
     } else {
       // Announcer toggled off - skip straight to the walk-up song.

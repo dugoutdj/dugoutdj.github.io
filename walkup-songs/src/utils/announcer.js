@@ -78,8 +78,13 @@ export function getAnnouncementUrl(name, number) {
   return urlCache.has(key) ? urlCache.get(key) : null;
 }
 
-// Play the announcement. Resolves true on completion, false on any skip.
-export function playAnnouncement(name, number) {
+// Play the announcement. Resolves true when the clip has played through
+// `overlap` of its tail (default 0 = full length), false on any skip.
+// Passing overlap: 0.25 lets the walk-up song start while the last 25%
+// of the announcement still plays. The announcement tail keeps playing
+// in the background and ends naturally.
+export function playAnnouncement(name, number, options = {}) {
+  const overlap = Math.min(1, Math.max(0, Number(options.overlap) || 0));
   return new Promise((resolve) => {
     if (!name) return resolve(false);
 
@@ -101,15 +106,33 @@ export function playAnnouncement(name, number) {
         const audio = audioEl;
         audio.src = url;
         audio.volume = 1;
-        audio.onended = () => done(true);
-        audio.onerror = () => done(false);
+        let finished = false;
+        const finish = (ok) => {
+          if (finished) return;
+          finished = true;
+          audio.ontimeupdate = null;
+          done(ok);
+        };
+        audio.onended = () => finish(true);
+        audio.onerror = () => finish(false);
+        if (overlap > 0) {
+          // Resolve once the clip is (1 - overlap) done so the song can
+          // start while the announcement's tail still plays.
+          audio.ontimeupdate = () => {
+            const d = audio.duration;
+            if (d && Number.isFinite(d) && d > 0 &&
+                audio.currentTime >= d * (1 - overlap)) {
+              finish(true);
+            }
+          };
+        }
         const playPromise = audio.play();
         if (playPromise && playPromise.catch) {
-          playPromise.catch(() => done(false));
+          playPromise.catch(() => finish(false));
         }
         // Safety net: if the clip somehow never ends (or autoplay stalls),
         // don't hold up the song forever.
-        setTimeout(() => done(false), 8000);
+        setTimeout(() => finish(false), 8000);
       })
       .catch(() => done(false));
   });
