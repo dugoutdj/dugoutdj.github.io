@@ -291,9 +291,16 @@ export const useYouTubePlayer = () => {
 
     playbackEndTimeRef.current = (startSec || 0) + (duration || 30);
     try {
-      // The muted pre-roll has advanced past startSec — seek back to the
-      // exact start second, unmute, and make sure it's playing.
-      player.seekTo(startSec || 0, true);
+      // Reload from the exact start second. The muted pre-roll has already
+      // loaded and buffered this video during the announcement, so this is
+      // fast and the buffer is ready — no delay, no scratch. We deliberately
+      // avoid seekTo(): it is unreliable on iOS while the buffer is still
+      // filling and often bounces back to 0:00 (the song then plays from the
+      // very beginning no matter the configured start). loadVideoById always
+      // begins at startSeconds exactly. The muted session from the tap
+      // already granted this player autoplay permission, so unmuting and
+      // playing still works even though we are now outside the gesture.
+      player.loadVideoById({ videoId: p.id, startSeconds: startSec || 0 });
       player.unMute();
       player.playVideo();
     } catch { /* fall through */ }
