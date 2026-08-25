@@ -473,21 +473,31 @@ function App() {
     const targetPlayer = players[index];
     setCurrentPlayerIndex(index);
 
-    // YouTube songs: start buffering right away (while the announcement
-    // plays) so the song begins the instant the announcer finishes — no
-    // buffer delay, and the stream is ready so playback starts cleanly.
-    if (targetPlayer.songSource !== 'apple' && targetPlayer.songVideoId) {
-      player.preloadSong(targetPlayer.songVideoId, targetPlayer.startTime || 0);
+    const isYouTube = targetPlayer.songSource !== 'apple' && !!targetPlayer.songVideoId;
+
+    // YouTube songs: start a muted pre-roll right here inside the tap so
+    // the video is already buffering (and playing silently) while the
+    // announcement runs. iOS blocks unmuted autoplay outside a gesture —
+    // that is why the song sometimes needed a manual play tap. Muted
+    // playback is always allowed; commitYouTube() seeks to the exact start
+    // second and unmutes when the announcement finishes.
+    if (isYouTube) {
+      player.prepareYouTube(targetPlayer.songVideoId, targetPlayer.startTime || 0);
     }
 
     const startSong = () => {
-      // Play song without auto-advance callback
-      player.playSong(
-        targetPlayer,
-        targetPlayer.startTime,
-        targetPlayer.duration,
-        null // No auto-advance
-      );
+      if (isYouTube) {
+        // Seek to the exact start second and unmute the pre-rolled video.
+        player.commitYouTube(targetPlayer.startTime || 0, targetPlayer.duration || 30);
+      } else {
+        // Apple songs: play through the audio element (no pre-roll needed).
+        player.playSong(
+          targetPlayer,
+          targetPlayer.startTime,
+          targetPlayer.duration,
+          null // No auto-advance
+        );
+      }
     };
 
     // Announce the player's name first, then play the walk-up song.

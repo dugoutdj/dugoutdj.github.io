@@ -2,13 +2,15 @@
   position: fixed;
   bottom: -100px;
   left: -100px;
-  width: 0;
-  height: 0;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
   z-index: -1;
 }
 
+/* Keep the hidden player at 1x1 — iOS Safari refuses to play video in a
+   0x0 iframe. It stays off-screen (the container above) so nothing shows. */
 #youtube-player {
-  width: 0;
-  height: 0;
+  width: 1px;
+  height: 1px;
 }

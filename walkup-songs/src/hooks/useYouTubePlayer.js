@@ -25,7 +25,9 @@ export const useYouTubePlayer = () => {
   const preloadedStartRef = useRef(null);
   const ytRetryRef = useRef(null);
   const pendingYouTubeRef = useRef(null);
+  const preparedRef = useRef(null);
   const startYouTubeRef = useRef(null);
+  const prepareYouTubeRef = useRef(null);
   const playTokenRef = useRef(0);
 
   useEffect(() => {
@@ -42,8 +44,8 @@ export const useYouTubePlayer = () => {
 
     loadYouTubeAPI().then((YT) => {
       new YT.Player('youtube-player', {
-        height: '0',
-        width: '0',
+        height: '1',
+        width: '1',
         playerVars: {
           controls: 0,
           disablekb: 1,
@@ -60,7 +62,11 @@ export const useYouTubePlayer = () => {
             if (pendingYouTubeRef.current) {
               const queued = pendingYouTubeRef.current;
               pendingYouTubeRef.current = null;
-              startYouTubeRef.current?.(queued.id, queued.startSec, queued.token);
+              if (queued.mode === 'prepare') {
+                prepareYouTubeRef.current?.(queued.id, queued.startSec, queued.token);
+              } else {
+                startYouTubeRef.current?.(queued.id, queued.startSec, queued.token);
+              }
             }
           },
           onStateChange: (event) => {
@@ -205,6 +211,7 @@ export const useYouTubePlayer = () => {
     modeRef.current = 'yt';
     setIsOffline(false);
     audioRef.current?.pause();
+    preparedRef.current = null;
 
     if (!player || !isReady) {
       // Player still loading — queue the start so it fires once it's ready.
@@ -239,6 +246,63 @@ export const useYouTubePlayer = () => {
   // handler (which captures the first render's scope).
   useEffect(() => {
     startYouTubeRef.current = startYouTube;
+  });
+
+  // --- Muted pre-roll -------------------------------------------------------
+  // iOS Safari blocks unmuted autoplay outside a user gesture. The walk-up
+  // announcement runs between the tap and the song, so a plain playVideo()
+  // after it can be silently refused — the "had to press play manually"
+  // bug. Muted playback is always allowed, so prepareYouTube() starts the
+  // video muted (buffering + playing silently) right inside the tap, and
+  // commitYouTube() seeks to the exact start second and unmutes when the
+  // announcement finishes. No gesture needed for unmute.
+  const prepareYouTube = useCallback((id, startSec, token = ++playTokenRef.current) => {
+    modeRef.current = 'yt';
+    setIsOffline(false);
+    audioRef.current?.pause();
+    preparedRef.current = { id, startSec, token };
+
+    if (!player || !isReady) {
+      // Player still loading — do the muted pre-roll once it's ready.
+      pendingYouTubeRef.current = { id, startSec, token, mode: 'prepare' };
+      return;
+    }
+
+    stopYtRetry();
+    try {
+      player.mute();
+      player.setVolume(100);
+      player.loadVideoById({ videoId: id, startSeconds: startSec });
+      player.playVideo();
+    } catch { /* fall through — commitYouTube will do a full start */ }
+  }, [player, isReady, stopYtRetry]);
+
+  const commitYouTube = useCallback((startSec, duration) => {
+    const p = preparedRef.current;
+    preparedRef.current = null;
+    if (!p) return; // nothing was prepared (Apple path)
+    if (p.token !== playTokenRef.current) return; // superseded by a newer play
+
+    if (!player || !isReady) {
+      // Player never became ready — queue a full start for when it does.
+      pendingYouTubeRef.current = { id: p.id, startSec, token: p.token, mode: 'commit' };
+      return;
+    }
+
+    playbackEndTimeRef.current = (startSec || 0) + (duration || 30);
+    try {
+      // The muted pre-roll has advanced past startSec — seek back to the
+      // exact start second, unmute, and make sure it's playing.
+      player.seekTo(startSec || 0, true);
+      player.unMute();
+      player.playVideo();
+    } catch { /* fall through */ }
+    startYtRetry(p.token);
+  }, [player, isReady, startYtRetry]);
+
+  // Keep the latest prepareYouTube reachable from onReady too.
+  useEffect(() => {
+    prepareYouTubeRef.current = prepareYouTube;
   });
 
   // Monitor playback time and stop the song at startTime + duration.
@@ -312,6 +376,7 @@ export const useYouTubePlayer = () => {
       if (token !== playTokenRef.current) return;
       modeRef.current = 'audio';
       setIsOffline(!!saved);
+      preparedRef.current = null;
       // Make sure a previously playing YouTube video goes quiet.
       try { player?.pauseVideo(); } catch { /* ignore */ }
       if (!audio) {
@@ -375,6 +440,7 @@ export const useYouTubePlayer = () => {
   const pauseSong = useCallback(() => {
     stopYtRetry();
     pendingYouTubeRef.current = null;
+    preparedRef.current = null;
     fadeOut(() => {
       if (modeRef.current === 'audio') {
         audioRef.current?.pause();
@@ -390,6 +456,7 @@ export const useYouTubePlayer = () => {
       if (playPromise && playPromise.catch) playPromise.catch(() => {});
       fadeIn();
     } else {
+      try { player?.unMute(); } catch { /* ignore */ }
       player?.playVideo();
       fadeIn();
     }
@@ -398,6 +465,7 @@ export const useYouTubePlayer = () => {
   const stopSong = useCallback(() => {
     stopYtRetry();
     pendingYouTubeRef.current = null;
+    preparedRef.current = null;
     fadeOut(() => {
       if (modeRef.current === 'audio') {
         const audio = audioRef.current;
@@ -424,6 +492,8 @@ export const useYouTubePlayer = () => {
     currentTime,
     playSong,
     preloadSong,
+    prepareYouTube,
+    commitYouTube,
     pauseSong,
     resumeSong,
     stopSong,
