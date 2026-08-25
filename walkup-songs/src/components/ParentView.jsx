@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchTeam, updatePlayerSong } from '../utils/api';
 import { playerArtwork } from '../utils/song';
 import { mediaProxy } from '../utils/media';
+import { loadYouTubeAPI } from '../utils/youtube';
 import PlayerForm from './PlayerForm';
 import './ParentView.css';
 
@@ -21,6 +22,9 @@ export default function ParentView({ teamId }) {
   // Which player id is currently playing a preview (null = none).
   const [previewingId, setPreviewingId] = useState(null);
   const audioRef = useRef(null);
+  // Hidden YouTube player for previewing YouTube walk-up windows.
+  const ytPlayerRef = useRef(null);
+  const ytTimerRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,9 +39,16 @@ export default function ParentView({ teamId }) {
     return () => { cancelled = true; };
   }, [teamId, reloadKey]);
 
-  // Tear down the shared audio element on unmount.
+  // Tear down the shared audio element and hidden YouTube player on unmount.
   useEffect(() => {
     return () => {
+      if (ytTimerRef.current) {
+        clearInterval(ytTimerRef.current);
+        ytTimerRef.current = null;
+      }
+      const yt = ytPlayerRef.current;
+      if (yt && typeof yt.destroy === 'function') yt.destroy();
+      ytPlayerRef.current = null;
       const audio = audioRef.current;
       if (audio) {
         audio.pause();
@@ -50,6 +61,14 @@ export default function ParentView({ teamId }) {
   const retry = () => setReloadKey((k) => k + 1);
 
   const stopPreview = () => {
+    // Stop a YouTube preview if one is running.
+    if (ytTimerRef.current) {
+      clearInterval(ytTimerRef.current);
+      ytTimerRef.current = null;
+    }
+    const yt = ytPlayerRef.current;
+    if (yt && typeof yt.pauseVideo === 'function') yt.pauseVideo();
+    // Stop an Apple <audio> preview if one is running.
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
@@ -57,11 +76,14 @@ export default function ParentView({ teamId }) {
     setPreviewingId(null);
   };
 
-  // Play the exact walk-up window of a player's saved song from the 30s
-  // Apple preview. Streams via the media proxy (mobile-safe) and stops at
-  // startTime + duration.
+  // Play the exact walk-up window of a player's saved song. Apple songs
+  // stream the 30s preview via the media proxy (mobile-safe); YouTube songs
+  // play through a hidden YouTube player. Both stop at startTime + duration.
   const previewPlayer = (player) => {
-    if (!player || player.songSource !== 'apple' || !player.previewUrl) return;
+    if (!player) return;
+    const isApple = player.songSource === 'apple';
+    const isYouTube = !isApple && !!player.songVideoId;
+    if (!isApple && !isYouTube) return;
 
     // Tapping the same row again stops playback.
     if (previewingId !== null && String(previewingId) === String(player.id)) {
@@ -73,6 +95,13 @@ export default function ParentView({ teamId }) {
 
     const start = Math.max(0, Number(player.startTime) || 0);
     const duration = Math.max(1, Number(player.duration) || 10);
+
+    // YouTube: play through the hidden YT player, stop at start + duration.
+    if (isYouTube) {
+      playYtPreview(player, start, duration);
+      return;
+    }
+
     const end = start + duration;
 
     // Create the audio element lazily on first use.
@@ -124,6 +153,80 @@ export default function ParentView({ teamId }) {
     setPreviewingId(String(player.id));
   };
 
+  // Lazily create the hidden YouTube player used to preview a YouTube
+  // walk-up window (Apple previews use the <audio> element instead).
+  const getYtPreviewPlayer = () => {
+    if (ytPlayerRef.current) return Promise.resolve(ytPlayerRef.current);
+    return loadYouTubeAPI().then((YT) => {
+      if (ytPlayerRef.current) return ytPlayerRef.current;
+      return new Promise((resolve) => {
+        let host = document.getElementById('parent-yt-preview');
+        if (!host) {
+          host = document.createElement('div');
+          host.id = 'parent-yt-preview';
+          host.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;';
+          document.body.appendChild(host);
+        }
+        let player = null;
+        try {
+          player = new YT.Player(host, {
+            height: '1',
+            width: '1',
+            playerVars: {
+              controls: 0,
+              disablekb: 1,
+              modestbranding: 1,
+              playsinline: 1
+            },
+            events: {
+              onReady: () => {
+                ytPlayerRef.current = player;
+                resolve(player);
+              },
+              onError: () => resolve(null)
+            }
+          });
+        } catch {
+          resolve(null);
+        }
+        // Safety net: don't hang callers if the API never fires onReady.
+        setTimeout(() => resolve(ytPlayerRef.current || null), 15000);
+      });
+    }).catch(() => null);
+  };
+
+  // Play the exact walk-up window of a YouTube song via the hidden player.
+  const playYtPreview = async (player, start, duration) => {
+    const yt = await getYtPreviewPlayer();
+    if (!yt || !player.songVideoId) {
+      setPreviewingId(null);
+      return;
+    }
+    const end = start + duration;
+    try {
+      yt.loadVideoById({ videoId: player.songVideoId, startSeconds: start });
+      yt.playVideo();
+      setPreviewingId(String(player.id));
+      // Poll the playback position and stop exactly at start + duration.
+      if (ytTimerRef.current) clearInterval(ytTimerRef.current);
+      ytTimerRef.current = setInterval(() => {
+        let t = 0;
+        try { t = yt.getCurrentTime(); } catch { /* player busy */ }
+        if (t >= end) {
+          if (ytTimerRef.current) {
+            clearInterval(ytTimerRef.current);
+            ytTimerRef.current = null;
+          }
+          if (typeof yt.pauseVideo === 'function') yt.pauseVideo();
+          setPreviewingId(null);
+        }
+      }, 100);
+    } catch {
+      setPreviewingId(null);
+      setSaveError('Preview unavailable — try again in a moment.');
+    }
+  };
+
   if (!team) {
     return (
       <div className="parent-view">
@@ -166,7 +269,9 @@ export default function ParentView({ teamId }) {
     }
   };
 
-  const previewable = (player) => player.songSource === 'apple' && !!player.previewUrl;
+  const previewable = (player) =>
+    (player.songSource === 'apple' && !!player.previewUrl) ||
+    (player.songSource !== 'apple' && !!player.songVideoId);
 
   return (
     <div className="parent-view">
