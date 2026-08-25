@@ -22,6 +22,10 @@ export const useYouTubePlayer = () => {
   const playbackEndTimeRef = useRef(null);
   const onSongEndRef = useRef(null);
   const preloadedVideoIdRef = useRef(null);
+  const preloadedStartRef = useRef(null);
+  const ytRetryRef = useRef(null);
+  const pendingYouTubeRef = useRef(null);
+  const startYouTubeRef = useRef(null);
   const playTokenRef = useRef(0);
 
   useEffect(() => {
@@ -51,6 +55,13 @@ export const useYouTubePlayer = () => {
             playerRef.current = event.target;
             setPlayer(event.target);
             setIsReady(true);
+            // A play requested before the player finished loading was
+            // queued — start it now that the player is ready.
+            if (pendingYouTubeRef.current) {
+              const queued = pendingYouTubeRef.current;
+              pendingYouTubeRef.current = null;
+              startYouTubeRef.current?.(queued.id, queued.startSec, queued.token);
+            }
           },
           onStateChange: (event) => {
             if (event.data === YT.PlayerState.PLAYING) {
@@ -67,6 +78,7 @@ export const useYouTubePlayer = () => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+      if (ytRetryRef.current) clearInterval(ytRetryRef.current);
       audio.pause();
       audio.remove();
       audioRef.current = null;
@@ -130,6 +142,105 @@ export const useYouTubePlayer = () => {
     }, 50);
   }, [getTargetVolume, setTargetVolume]);
 
+
+  const preloadSong = useCallback((videoId, startTime = 0) => {
+    if (!player || !isReady || !videoId) return;
+
+    // Only re-cue if the video or its start position changed.
+    if (preloadedVideoIdRef.current === videoId &&
+        preloadedStartRef.current === startTime) return;
+
+    try {
+      // Use cueVideoById to buffer the video without playing
+      player.cueVideoById({
+        videoId,
+        startSeconds: startTime
+      });
+      preloadedVideoIdRef.current = videoId;
+      preloadedStartRef.current = startTime;
+    } catch (error) {
+      console.warn('Failed to preload video:', error);
+    }
+  }, [player, isReady]);
+
+  // --- YouTube playback reliability ----------------------------------------
+  // playVideo() is a silent no-op while the player is still buffering,
+  // which used to leave the mini player stuck on "play" (the user had to
+  // tap again). The retry loop keeps the play intent alive until the
+  // player actually reports PLAYING; it stops on pause, stop, song end,
+  // or when a newer play supersedes this one (token check).
+  const stopYtRetry = useCallback(() => {
+    if (ytRetryRef.current) {
+      clearInterval(ytRetryRef.current);
+      ytRetryRef.current = null;
+    }
+  }, []);
+
+  const startYtRetry = useCallback((token) => {
+    stopYtRetry();
+    let attempts = 0;
+    ytRetryRef.current = setInterval(() => {
+      if (token !== playTokenRef.current) {
+        stopYtRetry();
+        return;
+      }
+      // Give up after ~10s so a dead/errored video doesn't loop forever.
+      if (++attempts > 40) {
+        stopYtRetry();
+        return;
+      }
+      let state = -1;
+      try { state = player.getPlayerState(); } catch { /* ignore */ }
+      if (state === 1 /* YT.PlayerState.PLAYING */) {
+        stopYtRetry();
+        return;
+      }
+      try { player.playVideo(); } catch { /* ignore */ }
+    }, 250);
+  }, [player, stopYtRetry]);
+
+  // Start (or queue) playback of a YouTube video at startSec.
+  const startYouTube = useCallback((id, startSec, token = playTokenRef.current) => {
+    if (token !== playTokenRef.current) return;
+    modeRef.current = 'yt';
+    setIsOffline(false);
+    audioRef.current?.pause();
+
+    if (!player || !isReady) {
+      // Player still loading — queue the start so it fires once it's ready.
+      pendingYouTubeRef.current = { id, startSec, token };
+      return;
+    }
+
+    stopYtRetry();
+    player.setVolume(100);
+
+    // If this exact video is already buffered (preloaded during the
+    // announcement), starting is instant. Otherwise loadVideoById loads the
+    // video AND queues playback, so the song starts as soon as the buffer
+    // at startSec is ready — no fixed-timeout gamble (too early = scratch,
+    // too late = delay).
+    const sameCue = preloadedVideoIdRef.current === id &&
+                    preloadedStartRef.current === startSec;
+    if (sameCue) {
+      try { player.playVideo(); } catch { /* ignore */ }
+    } else {
+      try {
+        player.loadVideoById({ videoId: id, startSeconds: startSec });
+      } catch {
+        try { player.cueVideoById({ videoId: id, startSeconds: startSec }); } catch { /* ignore */ }
+      }
+    }
+
+    startYtRetry(token);
+  }, [player, isReady, stopYtRetry, startYtRetry]);
+
+  // Keep the latest startYouTube reachable from the player's onReady
+  // handler (which captures the first render's scope).
+  useEffect(() => {
+    startYouTubeRef.current = startYouTube;
+  });
+
   // Monitor playback time and stop the song at startTime + duration.
   useEffect(() => {
     if (isPlaying) {
@@ -147,6 +258,7 @@ export const useYouTubePlayer = () => {
         setCurrentTime(time);
 
         if (playbackEndTimeRef.current && time >= playbackEndTimeRef.current) {
+          stopYtRetry();
           fadeOut(() => {
             if (modeRef.current === 'audio') {
               audioRef.current?.pause();
@@ -171,25 +283,7 @@ export const useYouTubePlayer = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, player, fadeOut]);
-
-  const preloadSong = useCallback((videoId, startTime = 0) => {
-    if (!player || !isReady || !videoId) return;
-
-    // Only preload if it's a different video than what's already preloaded
-    if (preloadedVideoIdRef.current === videoId) return;
-
-    try {
-      // Use cueVideoById to buffer the video without playing
-      player.cueVideoById({
-        videoId,
-        startSeconds: startTime
-      });
-      preloadedVideoIdRef.current = videoId;
-    } catch (error) {
-      console.warn('Failed to preload video:', error);
-    }
-  }, [player, isReady]);
+  }, [isPlaying, player, fadeOut, stopYtRetry]);
 
   // Play a player's song. `song` is the player object; its source can be
   // Apple Music (songSource 'apple' + previewUrl) or a legacy YouTube video
@@ -204,24 +298,11 @@ export const useYouTubePlayer = () => {
     const audio = audioRef.current;
     if (!key) return;
 
-    // Legacy path: play through the (hidden) YouTube player.
+    // Legacy path: play through the (hidden) YouTube player. The start is
+    // delegated to the shared startYouTube helper, which handles buffering,
+    // retries, and queueing while the player is still loading.
     const startYouTube = (id, startSec) => {
-      if (token !== playTokenRef.current) return;
-      modeRef.current = 'yt';
-      setIsOffline(false);
-      audio?.pause();
-      if (!player || !isReady) return;
-
-      player.setVolume(100);
-      player.cueVideoById({
-        videoId: id,
-        startSeconds: startSec
-      });
-      setTimeout(() => {
-        if (player && player.playVideo && token === playTokenRef.current) {
-          player.playVideo();
-        }
-      }, 200);
+      startYouTubeRef.current(id, startSec, token);
     };
 
     // Audio-element path: plays either a saved blob (`saved` true) or a
@@ -289,17 +370,19 @@ export const useYouTubePlayer = () => {
         if (token !== playTokenRef.current) return;
         if (song.songVideoId) startYouTube(song.songVideoId, startTime);
       });
-  }, [player, isReady, fadeIn]);
+  }, [player, fadeIn]);
 
   const pauseSong = useCallback(() => {
+    stopYtRetry();
+    pendingYouTubeRef.current = null;
     fadeOut(() => {
       if (modeRef.current === 'audio') {
         audioRef.current?.pause();
       } else {
-        player.pauseVideo();
+        player?.pauseVideo();
       }
     });
-  }, [player, fadeOut]);
+  }, [player, fadeOut, stopYtRetry]);
 
   const resumeSong = useCallback(() => {
     if (modeRef.current === 'audio') {
@@ -307,12 +390,14 @@ export const useYouTubePlayer = () => {
       if (playPromise && playPromise.catch) playPromise.catch(() => {});
       fadeIn();
     } else {
-      player.playVideo();
+      player?.playVideo();
       fadeIn();
     }
   }, [player, fadeIn]);
 
   const stopSong = useCallback(() => {
+    stopYtRetry();
+    pendingYouTubeRef.current = null;
     fadeOut(() => {
       if (modeRef.current === 'audio') {
         const audio = audioRef.current;
@@ -321,12 +406,12 @@ export const useYouTubePlayer = () => {
           audio.currentTime = 0;
         }
       } else {
-        player.stopVideo();
+        player?.stopVideo();
       }
       playbackEndTimeRef.current = null;
       onSongEndRef.current = null;
     });
-  }, [player, fadeOut]);
+  }, [player, fadeOut, stopYtRetry]);
 
   const setVolume = useCallback((volume) => {
     setTargetVolume(Math.max(0, Math.min(100, volume)));

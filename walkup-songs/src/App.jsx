@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import TeamSelector from './components/TeamSelector';
@@ -99,26 +99,6 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTeam?.id]);
-
-  // Warm the hidden YouTube player so the first walk-up starts quickly:
-  // cueVideoById buffers the stream without playing. This is strictly
-  // one-shot and only fires before any playback has started, so it can
-  // never clobber a song the user is starting. (The old always-on preload
-  // was disabled because it raced the play flow.)
-  const youtubeWarmedRef = useRef(false);
-  useEffect(() => {
-    if (!player.isReady || youtubeWarmedRef.current) return;
-    const t = setTimeout(() => {
-      if (player.isPlaying) return;
-      const first = players.find((p) => p.songSource !== 'apple' && !!p.songVideoId);
-      if (first && !youtubeWarmedRef.current) {
-        player.preloadSong(first.songVideoId, first.startTime || 0);
-        youtubeWarmedRef.current = true;
-      }
-    }, 1200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player.isReady, player]);
 
   const refreshLibraryStats = useCallback(async () => {
     const songs = await listSongs();
@@ -492,6 +472,13 @@ function App() {
 
     const targetPlayer = players[index];
     setCurrentPlayerIndex(index);
+
+    // YouTube songs: start buffering right away (while the announcement
+    // plays) so the song begins the instant the announcer finishes — no
+    // buffer delay, and the stream is ready so playback starts cleanly.
+    if (targetPlayer.songSource !== 'apple' && targetPlayer.songVideoId) {
+      player.preloadSong(targetPlayer.songVideoId, targetPlayer.startTime || 0);
+    }
 
     const startSong = () => {
       // Play song without auto-advance callback
