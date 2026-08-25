@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchTeam, updatePlayerSong } from '../utils/api';
 import { playerArtwork } from '../utils/song';
 import { mediaProxy } from '../utils/media';
-import { loadYouTubeAPI } from '../utils/youtube';
+import { formatTime, loadYouTubeAPI } from '../utils/youtube';
 import PlayerForm from './PlayerForm';
 import './ParentView.css';
 
@@ -348,6 +348,11 @@ export default function ParentView({ teamId }) {
                     <span className="parent-song">
                       {player.songTitle || 'No song selected'}
                     </span>
+                    {(player.songSource || player.songVideoId || player.songTitle) && (
+                      <span className="parent-window">
+                        Starts at {formatTime(player.startTime)} · {player.duration || 0}s
+                      </span>
+                    )}
                   </span>
                   {previewable(player) ? (
                     <button
