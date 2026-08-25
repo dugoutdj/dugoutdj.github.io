@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import TeamSelector from './components/TeamSelector';
@@ -100,29 +100,25 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTeam?.id]);
 
-  // Preload disabled to prevent playback interference
-  // TODO: Re-enable preloading after fixing playback issues
-
-  // useEffect(() => {
-  //   if (player.isReady && !player.isPlaying && players.length > 0 && currentPlayerIndex === null) {
-  //     const firstPlayer = players[0];
-  //     if (firstPlayer?.songVideoId) {
-  //       setTimeout(() => {
-  //         player.preloadSong(firstPlayer.songVideoId, firstPlayer.startTime);
-  //       }, 500);
-  //     }
-  //   }
-  // }, [player.isReady, player.isPlaying, players, currentPlayerIndex, player]);
-
-  // useEffect(() => {
-  //   if (!player.isPlaying && currentPlayerIndex !== null && players.length > 1 && hasPlayedOnce) {
-  //     const nextIndex = (currentPlayerIndex + 1) % players.length;
-  //     const nextPlayer = players[nextIndex];
-  //     if (nextPlayer?.songVideoId) {
-  //       player.preloadSong(nextPlayer.songVideoId, nextPlayer.startTime);
-  //     }
-  //   }
-  // }, [player.isPlaying, currentPlayerIndex, players, player, hasPlayedOnce]);
+  // Warm the hidden YouTube player so the first walk-up starts quickly:
+  // cueVideoById buffers the stream without playing. This is strictly
+  // one-shot and only fires before any playback has started, so it can
+  // never clobber a song the user is starting. (The old always-on preload
+  // was disabled because it raced the play flow.)
+  const youtubeWarmedRef = useRef(false);
+  useEffect(() => {
+    if (!player.isReady || youtubeWarmedRef.current) return;
+    const t = setTimeout(() => {
+      if (player.isPlaying) return;
+      const first = players.find((p) => p.songSource !== 'apple' && !!p.songVideoId);
+      if (first && !youtubeWarmedRef.current) {
+        player.preloadSong(first.songVideoId, first.startTime || 0);
+        youtubeWarmedRef.current = true;
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.isReady, player]);
 
   const refreshLibraryStats = useCallback(async () => {
     const songs = await listSongs();
@@ -158,9 +154,11 @@ function App() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleSaveOffline = async (player) => {
+  // Download and store a player's Apple song locally. Returns true when the
+  // song was saved. YouTube songs are streamed and intentionally not saved.
+  const savePlayerSong = async (player) => {
     const key = songKey(player);
-    if (!key || offlineSongs[key] || downloading[key]) return;
+    if (!key || offlineSongs[key] || downloading[key]) return false;
 
     setOfflineError(null);
     setDownloading((prev) => ({ ...prev, [key]: true }));
@@ -203,11 +201,13 @@ function App() {
         [key]: { size: record.size, savedAt: record.savedAt, title: record.title }
       }));
       await refreshLibraryStats();
+      return true;
     } catch (error) {
       console.error('Offline save failed:', error);
       setOfflineError(
         `Couldn't save "${player.songTitle || key}": ${friendlySaveError(error?.message)}`
       );
+      return false;
     } finally {
       setDownloading((prev) => {
         const next = { ...prev };
@@ -221,6 +221,8 @@ function App() {
       });
     }
   };
+
+  const handleSaveOffline = (player) => savePlayerSong(player);
 
   const handleRemoveOffline = async (key) => {
     if (!key) return;
@@ -238,6 +240,45 @@ function App() {
     await clearLibrary();
     setOfflineSongs({});
     await refreshLibraryStats();
+  };
+
+  // One-tap catch-up: download every Apple song that isn't saved offline yet.
+  // YouTube songs can't be saved (YouTube streams encrypted segments and its
+  // ToS forbid downloads), so they are counted and reported, not attempted.
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const handleSyncOffline = async () => {
+    if (!currentTeam || syncing) return;
+    const roster = currentTeam.players || [];
+    const pending = roster.filter(
+      (p) => p.songSource === 'apple' && !!songKey(p) &&
+        !offlineSongs[songKey(p)] && !downloading[songKey(p)]
+    );
+    const ytCount = roster.filter(
+      (p) => p.songSource !== 'apple' && !!p.songVideoId
+    ).length;
+    const ytNote = ytCount
+      ? ` \u00b7 ${ytCount} YouTube song${ytCount === 1 ? '' : 's'} unable to save offline`
+      : '';
+    if (pending.length === 0) {
+      setSyncStatus(`All songs are already saved offline${ytNote}`);
+      return;
+    }
+    setSyncing(true);
+    let saved = 0;
+    let failed = 0;
+    for (let i = 0; i < pending.length; i += 1) {
+      const p = pending[i];
+      setSyncStatus(`Syncing ${i + 1}/${pending.length}: ${p.songTitle || p.name || 'song'}…`);
+      const ok = await savePlayerSong(p);
+      if (ok) saved += 1;
+      else failed += 1;
+    }
+    const summary = `Synced ${saved} song${saved === 1 ? '' : 's'} offline`
+      + (failed ? `, ${failed} failed` : '')
+      + ytNote;
+    setSyncStatus(summary);
+    setSyncing(false);
   };
 
   const closePlayerForm = () => {
@@ -777,6 +818,19 @@ function App() {
             >
               Clear
             </button>
+          )}
+        </span>
+        <span className="offline-sync-area">
+          <button
+            className="offline-sync-btn"
+            onClick={handleSyncOffline}
+            disabled={syncing || players.length === 0}
+            title="Download any songs not yet saved to this device"
+          >
+            {syncing ? 'Syncing…' : '🔄 Sync offline'}
+          </button>
+          {syncStatus && (
+            <span className="offline-sync-status">{syncStatus}</span>
           )}
         </span>
       </footer>
