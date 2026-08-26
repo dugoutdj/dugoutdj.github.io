@@ -63,6 +63,7 @@ export const useLocalStorage = () => {
       startTime: player.startTime || 0,
       duration: player.duration || 30,
       updatedAt: player.updatedAt || Date.now(),
+      coachEditedAt: player.coachEditedAt || 0,
       order: player.order || 0
     };
 

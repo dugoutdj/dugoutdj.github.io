@@ -283,12 +283,23 @@ function App() {
     // authoritative one. Record the edit time so a parent's OLDER submission
     // (already in the shared roster) is no longer offered as an update to
     // apply back over the coach's newer edit.
-    playerData = { ...playerData, updatedAt: Date.now() };
+    const coachEditedAt = Date.now();
+    playerData = {
+      ...playerData,
+      updatedAt: coachEditedAt,
+      coachEditedAt
+    };
 
     const oldKey = editingPlayer ? songKey(editingPlayer) : null;
 
     if (editingPlayer) {
       storage.updatePlayer(currentTeam.id, editingPlayer.id, playerData);
+      // A local coach save supersedes any previously polled parent snapshot.
+      setPendingUpdates((prev) => {
+        const next = { ...prev };
+        delete next[editingPlayer.id];
+        return next;
+      });
     } else {
       storage.addPlayer(currentTeam.id, playerData);
     }
@@ -400,16 +411,21 @@ function App() {
   // edits are authoritative, so a parent's EARLIER submission must never be
   // offered as an update that would revert the coach's newer change. Only a
   // parent update strictly NEWER than the coach's last local touch wins.
-  // When either side lacks a timestamp (legacy data), fall back to the plain
-  // content diff so existing detection keeps working.
+  // The coachEditAt watermark also handles shared rosters created before the
+  // server began stamping parent updates. Once the coach has edited locally,
+  // an un-timestamped remote copy cannot safely supersede that edit.
   const songSig = useCallback(
     (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|'),
     []
   );
   const isPending = useCallback((local, rp) => {
     if (songSig(local) === songSig(rp)) return false;
-    const lT = Number(local.updatedAt || 0);
+    const lT = Math.max(
+      Number(local.updatedAt || 0),
+      Number(local.coachEditedAt || 0)
+    );
     const rT = Number(rp.updatedAt || 0);
+    if (lT && !rT) return false;
     return !(lT && rT && lT >= rT);
   }, [songSig]);
 
@@ -456,7 +472,10 @@ function App() {
             const local = players.find((p) => String(p.id) === String(rp.id));
             if (local && isPending(local, rp)) fresh[rp.id] = rp;
           });
-          if (Object.keys(fresh).length > 0) toApply = fresh;
+          // A successful fetch is authoritative even when it returns no
+          // pending players. Never fall back to an older polled snapshot
+          // after the coach has already superseded it locally.
+          toApply = fresh;
         }
       } catch {
         // Transient network error — fall back to the last polled snapshot.
