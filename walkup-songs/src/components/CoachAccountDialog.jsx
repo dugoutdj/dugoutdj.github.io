@@ -30,10 +30,14 @@ export default function CoachAccountDialog({ team, onClose, onConnected }) {
   };
 
   const connect = async () => {
-    setBusy(true); setStatus('Connecting existing team…');
+    setBusy(true); setStatus('Loading your existing team…');
     try {
-      await claimAccountTeam({ sharedTeamId: teamId.trim(), name: team.name, players: team.players || [] });
-      onConnected(teamId.trim()); setStatus('Team connected and backed up to your account.');
+      const response = await fetch(`/api/team/${encodeURIComponent(teamId.trim())}`);
+      const remote = await response.json();
+      if (!response.ok) throw new Error(remote.error || 'Could not load that team.');
+      await claimAccountTeam({ sharedTeamId: teamId.trim(), name: remote.name, players: remote.players || [] });
+      onConnected(teamId.trim(), { name: remote.name, players: remote.players || [] });
+      setStatus(`Connected ${remote.name} with ${remote.players?.length || 0} players.`);
     } catch (error) { setStatus(error.message); }
     finally { setBusy(false); }
   };

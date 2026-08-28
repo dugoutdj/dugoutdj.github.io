@@ -920,8 +920,15 @@ function App() {
           onClose={() => setShowCoachAccount(false)}
           onConnected={(connectedId, restored) => {
             setCoachAccount((current) => current || { email: 'signed-in coach' });
-            if (restored) storage.updateTeam(currentTeam.id, { name: restored.name, players: restored.players, sharedTeamId: connectedId });
-            else if (connectedId) storage.updateTeam(currentTeam.id, { sharedTeamId: connectedId });
+            if (restored) {
+              storage.updateTeam(currentTeam.id, {
+                name: restored.name,
+                players: restored.players,
+                sharedTeamId: connectedId
+              });
+            } else if (connectedId) {
+              storage.updateTeam(currentTeam.id, { sharedTeamId: connectedId });
+            }
           }}
         />
       )}
