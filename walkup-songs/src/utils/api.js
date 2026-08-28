@@ -41,6 +41,34 @@ export async function updatePlayerSong(teamId, playerId, songData) {
   });
 }
 
+export async function requestLoginLink(email) {
+  return request('/auth/request-link', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function verifyLoginToken(token) {
+  return request('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) });
+}
+
+export async function getCurrentCoach() {
+  return request('/auth/me');
+}
+
+export async function logoutCoach() {
+  return request('/auth/logout', { method: 'POST' });
+}
+
+export async function claimAccountTeam(teamData) {
+  return request('/account/team', { method: 'POST', body: JSON.stringify(teamData) });
+}
+
+export async function fetchAccountTeams() {
+  return request('/account/team');
+}
+
+export async function syncAccountTeam(teamData) {
+  return request('/account/team', { method: 'PUT', body: JSON.stringify(teamData) });
+}
+
 // Remove a shared roster from KV.
 export async function deleteTeam(teamId) {
   return request(`/team/${encodeURIComponent(teamId)}`, { method: 'DELETE' });
