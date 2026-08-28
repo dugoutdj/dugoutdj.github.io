@@ -14,6 +14,8 @@ export function songKey(player) {
   if (player.songSource === 'apple') {
     return player.appleTrackId ? `apple:${player.appleTrackId}` : null;
   }
+  // Treat a video id as a YouTube song even when older shared records have
+  // an empty or inconsistent songSource value.
   return player.songVideoId || null;
 }
 

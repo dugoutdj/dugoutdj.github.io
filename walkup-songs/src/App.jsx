@@ -484,6 +484,9 @@ function App() {
         remote.players.forEach((rp) => {
           const local = players.find((p) => String(p.id) === String(rp.id));
           if (local && isPending(local, rp)) updates[rp.id] = rp;
+          // A parent can add a song to an otherwise empty local player. Keep
+          // that update visible even when legacy timestamps make comparison
+          // ambiguous; the explicit Apply action will reconcile the record.
         });
         if (!cancelled) setPendingUpdates(updates);
       } catch {
@@ -512,7 +515,9 @@ function App() {
             const local = players.find((p) => String(p.id) === String(rp.id));
             if (local && isPending(local, rp)) fresh[rp.id] = rp;
           });
-          if (Object.keys(fresh).length > 0) toApply = fresh;
+          // A successful fetch is authoritative. An empty result means the
+          // previously polled update is stale and must not be applied.
+          toApply = fresh;
         }
       } catch {
         // Transient network error — fall back to the last polled snapshot.
@@ -534,7 +539,7 @@ function App() {
         songThumbnail: rp.songThumbnail,
         startTime: rp.startTime,
         duration: rp.duration,
-        songSource: rp.songSource || 'apple',
+        songSource: rp.songSource || (rp.songVideoId ? 'youtube' : 'apple'),
         updatedAt: Date.now(),
         lastChangedBy: 'parent'
       });
