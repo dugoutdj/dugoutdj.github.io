@@ -106,6 +106,9 @@ export default function PlayerList({
                     {pendingUpdates[player.id] && (
                       <span className="pending-update-badge">Updated ✓</span>
                     )}
+                    {player.lastChangedBy === 'coach' && (
+                      <span className="coach-update-badge">Coach updated</span>
+                    )}
                   </span>
                   <span className="song-time">
                     {formatTime(player.startTime)} ({player.duration}s)

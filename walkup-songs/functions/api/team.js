@@ -42,7 +42,8 @@ function sanitizePlayer(p) {
     startTime: Number(p.startTime) || 0,
     duration: Number(p.duration) || 10,
     songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : ''),
-    updatedAt: Number(p.updatedAt) || Date.now()
+    updatedAt: Number(p.updatedAt) || Date.now(),
+    lastChangedBy: p.lastChangedBy === 'coach' ? 'coach' : 'parent'
   };
 }
 

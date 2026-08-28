@@ -61,6 +61,7 @@ export async function onRequestPut(context) {
     // Stamp the wall-clock time of this parent update so the coach can tell
     // a fresh parent submission from one they have already superseded.
     player.updatedAt = Date.now();
+    player.lastChangedBy = 'parent';
 
     // Clamp the window only for Apple songs (30s preview / 5-15s model).
     // YouTube songs keep their chosen start/length over the full video.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import TeamSelector from './components/TeamSelector';
@@ -44,6 +44,8 @@ function App() {
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
+  const playbackRequestRef = useRef(0);
+  const activePlayerIdRef = useRef(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Start collapsed
   const [offlineSongs, setOfflineSongs] = useState({}); // videoId -> { size, savedAt, title }
   const [downloading, setDownloading] = useState({}); // videoId -> true
@@ -56,6 +58,7 @@ function App() {
   const [shareStatus, setShareStatus] = useState('');     // coach-facing status text
   const [shareDismissed, setShareDismissed] = useState(false); // hide the status box (link stays live)
   const [pendingUpdates, setPendingUpdates] = useState({}); // playerId -> remote player data
+  const [publishingCoachChange, setPublishingCoachChange] = useState(false);
 
   // Parent mode: URL is /team/<id> — render the simple parent view instead.
   const parentTeamId = teamIdFromLocation();
@@ -283,23 +286,12 @@ function App() {
     // authoritative one. Record the edit time so a parent's OLDER submission
     // (already in the shared roster) is no longer offered as an update to
     // apply back over the coach's newer edit.
-    const coachEditedAt = Date.now();
-    playerData = {
-      ...playerData,
-      updatedAt: coachEditedAt,
-      coachEditedAt
-    };
+    playerData = { ...playerData, updatedAt: Date.now(), lastChangedBy: 'coach' };
 
     const oldKey = editingPlayer ? songKey(editingPlayer) : null;
 
     if (editingPlayer) {
       storage.updatePlayer(currentTeam.id, editingPlayer.id, playerData);
-      // A local coach save supersedes any previously polled parent snapshot.
-      setPendingUpdates((prev) => {
-        const next = { ...prev };
-        delete next[editingPlayer.id];
-        return next;
-      });
     } else {
       storage.addPlayer(currentTeam.id, playerData);
     }
@@ -336,6 +328,55 @@ function App() {
         handleRemoveOffline(oldKey);
       }
     }
+
+    // Publish coach song edits automatically when this team already has a
+    // parent link. The local save remains immediate; publishing is best-effort
+    // and does not block the coach from continuing to use the roster.
+    if (currentTeam.sharedTeamId && playerData.songTitle) {
+      setPublishingCoachChange(true);
+      const publishedTeam = {
+        ...currentTeam,
+        players: (currentTeam.players || []).map((p) =>
+          String(p.id) === String(playerData.id || editingPlayer?.id)
+            ? { ...p, ...playerData }
+            : p
+        )
+      };
+      publishTeamToParents(publishedTeam)
+        .catch((err) => console.error('Automatic coach sync failed:', err))
+        .finally(() => setPublishingCoachChange(false));
+    }
+  };
+
+  const publishTeamToParents = async (team) => {
+    if (!team?.sharedTeamId || !team.players?.length) return;
+    const payload = {
+      name: team.name,
+      players: team.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        pronounced: p.pronounced || p.name || '',
+        number: p.number || '',
+        songTitle: p.songTitle || '',
+        previewUrl: p.previewUrl || '',
+        artworkUrl: p.artworkUrl || '',
+        appleTrackId: p.appleTrackId || '',
+        songVideoId: p.songVideoId || '',
+        songThumbnail: p.songThumbnail || '',
+        startTime: p.startTime || 0,
+        duration: p.duration || 10,
+        songSource: p.songSource || '',
+        updatedAt: p.updatedAt || Date.now(),
+        lastChangedBy: p.lastChangedBy || 'coach'
+      })),
+      teamId: team.sharedTeamId
+    };
+    await createTeam(payload);
+    setPendingUpdates((prev) => {
+      const next = { ...prev };
+      team.players.forEach((p) => { delete next[p.id]; });
+      return next;
+    });
   };
 
   const handleDeletePlayer = (playerId) => {
@@ -348,6 +389,8 @@ function App() {
       const deletedIndex = players.indexOf(deletedPlayer);
       if (deletedIndex === currentPlayerIndex) {
         setCurrentPlayerIndex(null);
+        activePlayerIdRef.current = null;
+        stopAnnouncement();
         player.stopSong();
       } else if (deletedIndex < currentPlayerIndex) {
         setCurrentPlayerIndex(currentPlayerIndex - 1);
@@ -383,7 +426,9 @@ function App() {
           songThumbnail: p.songThumbnail || '',
           startTime: p.startTime || 0,
           duration: p.duration || 10,
-          songSource: p.songSource || ''
+          songSource: p.songSource || '',
+          updatedAt: p.updatedAt || Date.now(),
+          lastChangedBy: p.lastChangedBy || 'coach'
         })),
         // Reuse the existing shared id so the URL never changes.
         ...(currentTeam.sharedTeamId ? { teamId: currentTeam.sharedTeamId } : {})
@@ -411,21 +456,16 @@ function App() {
   // edits are authoritative, so a parent's EARLIER submission must never be
   // offered as an update that would revert the coach's newer change. Only a
   // parent update strictly NEWER than the coach's last local touch wins.
-  // The coachEditAt watermark also handles shared rosters created before the
-  // server began stamping parent updates. Once the coach has edited locally,
-  // an un-timestamped remote copy cannot safely supersede that edit.
+  // When either side lacks a timestamp (legacy data), fall back to the plain
+  // content diff so existing detection keeps working.
   const songSig = useCallback(
     (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|'),
     []
   );
   const isPending = useCallback((local, rp) => {
     if (songSig(local) === songSig(rp)) return false;
-    const lT = Math.max(
-      Number(local.updatedAt || 0),
-      Number(local.coachEditedAt || 0)
-    );
+    const lT = Number(local.updatedAt || 0);
     const rT = Number(rp.updatedAt || 0);
-    if (lT && !rT) return false;
     return !(lT && rT && lT >= rT);
   }, [songSig]);
 
@@ -472,10 +512,7 @@ function App() {
             const local = players.find((p) => String(p.id) === String(rp.id));
             if (local && isPending(local, rp)) fresh[rp.id] = rp;
           });
-          // A successful fetch is authoritative even when it returns no
-          // pending players. Never fall back to an older polled snapshot
-          // after the coach has already superseded it locally.
-          toApply = fresh;
+          if (Object.keys(fresh).length > 0) toApply = fresh;
         }
       } catch {
         // Transient network error — fall back to the last polled snapshot.
@@ -498,7 +535,8 @@ function App() {
         startTime: rp.startTime,
         duration: rp.duration,
         songSource: rp.songSource || 'apple',
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        lastChangedBy: 'parent'
       });
       applied += 1;
     });
@@ -509,9 +547,23 @@ function App() {
   };
 
   const handlePlayPlayer = (index) => {
-    if (!players[index] || !songKey(players[index])) return;
-
     const targetPlayer = players[index];
+    if (!targetPlayer || !songKey(targetPlayer)) return;
+
+    // A row is a strict play/stop toggle. Use a stable string id and the
+    // synchronous ref so a second tap cannot observe stale React state.
+    if (String(activePlayerIdRef.current) === String(targetPlayer.id)) {
+      playbackRequestRef.current += 1;
+      activePlayerIdRef.current = null;
+      stopAnnouncement();
+      player.stopSong();
+      setCurrentPlayerIndex(null);
+      return;
+    }
+
+    playbackRequestRef.current += 1;
+    activePlayerIdRef.current = String(targetPlayer.id);
+    const request = playbackRequestRef.current;
     setCurrentPlayerIndex(index);
 
     const isYouTube = targetPlayer.songSource !== 'apple' && !!targetPlayer.songVideoId;
@@ -527,6 +579,7 @@ function App() {
     }
 
     const startSong = () => {
+      if (request !== playbackRequestRef.current) return;
       if (isYouTube) {
         // Seek to the exact start second and unmute the pre-rolled video.
         player.commitYouTube(targetPlayer.startTime || 0, targetPlayer.duration || 30);
@@ -569,6 +622,8 @@ function App() {
   };
 
   const handleStop = () => {
+    playbackRequestRef.current += 1;
+    activePlayerIdRef.current = null;
     stopAnnouncement();
     player.stopSong();
     setCurrentPlayerIndex(null);
@@ -709,6 +764,7 @@ function App() {
                   </p>
                 </div>
                 <div className="team-header-actions">
+                  {publishingCoachChange && <span className="syncing-coach-status">Saving coach change…</span>}
                   <button
                     className="btn btn-secondary btn-sm"
                     onClick={handleShareWithParents}

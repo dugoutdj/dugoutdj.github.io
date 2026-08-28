@@ -168,6 +168,14 @@
   border-radius: 0.25rem;
 }
 
+.parent-coach-update {
+  display: inline-block;
+  margin-top: 0.15rem;
+  color: #15803d;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .parent-song {
   font-size: 0.8125rem;
   color: var(--primary-color);

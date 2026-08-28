@@ -144,6 +144,13 @@
 /* Status boxes (share link, parent updates) drop to their own
    full-width row below the team name and action buttons. */
 .team-header .share-status,
+.syncing-coach-status,
+.coach-update-badge {
+  color: #15803d;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .team-header .pending-updates {
   flex-basis: 100%;
   width: 100%;
