@@ -3,6 +3,8 @@ import { claimAccountTeam, fetchAccountTeams, getCurrentCoach, logoutCoach, requ
 import './CoachAccountDialog.css';
 
 export default function CoachAccountDialog({ team, onClose, onConnected }) {
+  const hasAnonymousTeam = Boolean(team?.players?.length);
+
   const [coach, setCoach] = useState(null);
   const [email, setEmail] = useState('');
   const [teamId, setTeamId] = useState(team?.sharedTeamId || '');
@@ -13,10 +15,15 @@ export default function CoachAccountDialog({ team, onClose, onConnected }) {
     const token = new URLSearchParams(window.location.search).get('login');
     if (!token) return;
     setBusy(true);
-    verifyLoginToken(token).then((result) => {
+    verifyLoginToken(token).then(async (result) => {
       setCoach({ email: result.email });
       window.history.replaceState({}, '', window.location.pathname);
-      setStatus('Signed in successfully.');
+      if (hasAnonymousTeam && team?.sharedTeamId) {
+        setStatus('Protecting your team…');
+        await connectTeam(team.sharedTeamId);
+      } else {
+        setStatus('Signed in successfully.');
+      }
     }).catch((error) => setStatus(error.message)).finally(() => setBusy(false));
     getCurrentCoach().then((result) => { if (result.authenticated) setCoach(result); }).catch(() => {});
   }, []);
@@ -29,18 +36,20 @@ export default function CoachAccountDialog({ team, onClose, onConnected }) {
     finally { setBusy(false); }
   };
 
-  const connect = async () => {
+  const connectTeam = async (requestedTeamId) => {
     setBusy(true); setStatus('Loading your existing team…');
     try {
-      const response = await fetch(`/api/team/${encodeURIComponent(teamId.trim())}`);
+      const response = await fetch(`/api/team/${encodeURIComponent(requestedTeamId.trim())}`);
       const remote = await response.json();
       if (!response.ok) throw new Error(remote.error || 'Could not load that team.');
-      await claimAccountTeam({ sharedTeamId: teamId.trim(), name: remote.name, players: remote.players || [] });
-      onConnected(teamId.trim(), { name: remote.name, players: remote.players || [] });
+      await claimAccountTeam({ sharedTeamId: requestedTeamId.trim(), name: team?.name || remote.name, players: team?.players?.length ? team.players : (remote.players || []) });
+      onConnected(requestedTeamId.trim(), { name: team?.name || remote.name, players: team?.players?.length ? team.players : (remote.players || []) });
       setStatus(`Connected ${remote.name} with ${remote.players?.length || 0} players.`);
     } catch (error) { setStatus(error.message); }
     finally { setBusy(false); }
   };
+
+  const connect = () => connectTeam(teamId);
 
   const restore = async () => {
     setBusy(true); setStatus('Looking for your cloud teams…');
@@ -65,6 +74,9 @@ export default function CoachAccountDialog({ team, onClose, onConnected }) {
           <button className="btn btn-primary" disabled={busy}>{busy ? 'Sending…' : 'Email me a sign-in link'}</button>
         </form> : <>
           <p>Signed in as <strong>{coach.email}</strong></p>
+          {hasAnonymousTeam && !team?.sharedTeamId && (
+            <p>Your current team will be backed up automatically when you share it with parents.</p>
+          )}
           <label className="coach-team-id-label">Existing parent-link team ID
             <input className="input" value={teamId} onChange={(event) => setTeamId(event.target.value)} placeholder="Example: 1uxw0bbv" />
           </label>
