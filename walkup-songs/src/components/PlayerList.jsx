@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatTime } from '../utils/youtube';
 import { songKey, playerHasSong, playerArtwork } from '../utils/song';
 import './PlayerList.css';
@@ -14,103 +14,41 @@ export default function PlayerList({
   saveStatus = {},
   pendingUpdates = {},
 }) {
-  const [draggedIndex, setDraggedIndex] = useState(null);
+  // Pointer-based drag reorder, driven from the drag handle (☰). Only the
+  // handle claims touches (touch-action: none), so the rest of each row and
+  // the page scroll natively with one or two fingers.
   const [touchDragIndex, setTouchDragIndex] = useState(null);
-  const touchStateRef = useRef(null);
+  const dragRef = useRef(null); // { pointerId, fromIndex }
 
-  useEffect(() => {
-    const handlePointerMove = (event) => {
-      const state = touchStateRef.current;
-      if (!state || event.pointerId !== state.pointerId) return;
-      if (!state.dragging) {
-        const movedX = event.clientX - state.startX;
-        const movedY = event.clientY - state.startY;
-        if (Math.hypot(movedX, movedY) > 10) {
-          clearTimeout(state.timer);
-          touchStateRef.current = null;
-        }
-        return;
-      }
-      const row = document.elementFromPoint(event.clientX, event.clientY)?.closest('.player-item');
-      if (!row) return;
-      const index = Number(row.dataset.index);
-      if (!Number.isInteger(index) || index === state.index) return;
-      const rect = row.getBoundingClientRect();
-      const targetIndex = event.clientY < rect.top + rect.height / 2 ? index : index + 1;
-      const nextIndex = Math.max(0, Math.min(players.length - 1, targetIndex));
-      if (nextIndex === state.index) return;
-      const reordered = [...players];
-      const [moved] = reordered.splice(state.index, 1);
-      reordered.splice(nextIndex, 0, moved);
-      onReorder(reordered);
-      state.index = nextIndex;
-      setTouchDragIndex(nextIndex);
-      event.preventDefault();
-    };
-    const handlePointerUp = (event) => {
-      const state = touchStateRef.current;
-      if (state?.pointerId === event.pointerId) {
-        clearTimeout(state.timer);
-        touchStateRef.current = null;
-        setTouchDragIndex(null);
-      }
-    };
-    window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
-    };
-  }, [players, onReorder]);
-
-  const handlePointerDown = (event, index) => {
-    if (event.pointerType !== 'touch') return;
+  const handleDragStart = (event, index) => {
+    event.preventDefault();
     event.stopPropagation();
-    const target = event.target.closest('button, a, input, select, textarea');
-    if (target) return;
-    const row = event.currentTarget;
-    const pointerId = event.pointerId;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const timer = setTimeout(() => {
-      touchStateRef.current = { pointerId, index, dragging: true, startX, startY };
-      setTouchDragIndex(index);
-      row.setPointerCapture?.(pointerId);
-      if (navigator.vibrate) navigator.vibrate(30);
-    }, 450);
-    touchStateRef.current = { pointerId, index, timer, dragging: false, startX, startY };
+    dragRef.current = { pointerId: event.pointerId, fromIndex: index };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setTouchDragIndex(index);
+    if (navigator.vibrate) navigator.vibrate(20);
   };
 
-  const handlePointerCancel = (event) => {
-    const state = touchStateRef.current;
-    if (!state || state.pointerId !== event.pointerId) return;
-    clearTimeout(state.timer);
-    touchStateRef.current = null;
+  const handleDragMove = (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const row = document.elementFromPoint(event.clientX, event.clientY)?.closest('.player-item');
+    if (!row) return;
+    const toIndex = Number(row.dataset.index);
+    if (!Number.isInteger(toIndex) || toIndex === drag.fromIndex) return;
+    const reordered = [...players];
+    const [moved] = reordered.splice(drag.fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    onReorder(reordered);
+    drag.fromIndex = toIndex;
+    setTouchDragIndex(toIndex);
+    event.preventDefault();
+  };
+
+  const handleDragEnd = (event) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
     setTouchDragIndex(null);
-  };
-
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e, index) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === index) return;
-
-    const newPlayers = [...players];
-    const draggedPlayer = newPlayers[draggedIndex];
-    newPlayers.splice(draggedIndex, 1);
-    newPlayers.splice(index, 0, draggedPlayer);
-
-    onReorder(newPlayers);
-    setDraggedIndex(index);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
   };
 
   const movePlayer = (index, direction) => {
@@ -150,17 +88,8 @@ export default function PlayerList({
           key={player.id}
           className={`player-item ${currentPlayerIndex === index ? 'current' : ''} ${touchDragIndex === index ? 'touch-dragging' : ''}`}
           data-index={index}
-          onClick={(event) => {
-            const state = touchStateRef.current;
-            if (touchDragIndex !== null || state?.timer || state?.dragging) {
-              event.preventDefault();
-              return;
-            }
-            onPlayPlayer(index);
-          }}
-          onPointerDown={(event) => handlePointerDown(event, index)}
-          onPointerCancel={handlePointerCancel}
-          onDragOver={(e) => handleDragOver(e, index)}
+          onClick={() => onPlayPlayer(index)}
+          onDragOver={(e) => e.preventDefault()}
         >
           <div className="col-order">
             <span className="order-number">{index + 1}</span>
@@ -259,10 +188,11 @@ export default function PlayerList({
             </button>
             <span
               className="drag-handle"
-              draggable="true"
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragEnd={handleDragEnd}
-              title="Drag to reorder"
+              title="Press and slide to reorder"
+              onPointerDown={(e) => handleDragStart(e, index)}
+              onPointerMove={handleDragMove}
+              onPointerUp={handleDragEnd}
+              onPointerCancel={handleDragEnd}
             >
               ☰
             </span>
