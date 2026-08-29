@@ -21,7 +21,7 @@ export default function PlayerList({
   useEffect(() => {
     const handlePointerMove = (event) => {
       const state = touchStateRef.current;
-      if (!state || event.pointerId !== state.pointerId) return;
+      if (!state || !state.dragging || event.pointerId !== state.pointerId) return;
       const row = document.elementFromPoint(event.clientX, event.clientY)?.closest('.player-item');
       if (!row) return;
       const index = Number(row.dataset.index);
@@ -39,7 +39,9 @@ export default function PlayerList({
       event.preventDefault();
     };
     const handlePointerUp = (event) => {
-      if (touchStateRef.current?.pointerId === event.pointerId) {
+      const state = touchStateRef.current;
+      if (state?.pointerId === event.pointerId) {
+        clearTimeout(state.timer);
         touchStateRef.current = null;
         setTouchDragIndex(null);
       }
