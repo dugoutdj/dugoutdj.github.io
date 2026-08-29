@@ -248,7 +248,7 @@
 
   .player-item {
     display: grid;
-    touch-action: pan-y;
+    touch-action: none;
     -webkit-user-drag: none;
     user-select: none;
     -webkit-user-select: none;

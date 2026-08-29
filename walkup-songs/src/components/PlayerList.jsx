@@ -67,6 +67,7 @@ export default function PlayerList({
 
   const handlePointerDown = (event, index) => {
     if (event.pointerType !== 'touch') return;
+    event.stopPropagation();
     const target = event.target.closest('button, a, input, select, textarea');
     if (target) return;
     const row = event.currentTarget;
