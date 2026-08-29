@@ -144,8 +144,7 @@
 /* Status boxes (share link, parent updates) drop to their own
    full-width row below the team name and action buttons. */
 .team-header .share-status,
-.syncing-coach-status,
-.coach-update-badge {
+.syncing-coach-status {
   color: #15803d;
   font-size: 0.75rem;
   font-weight: 600;
