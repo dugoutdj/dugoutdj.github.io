@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatTime } from '../utils/youtube';
 import { songKey, playerHasSong, playerArtwork } from '../utils/song';
 import './PlayerList.css';
@@ -15,6 +15,67 @@ export default function PlayerList({
   pendingUpdates = {},
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
+  const [touchDragIndex, setTouchDragIndex] = useState(null);
+  const touchStateRef = useRef(null);
+
+  useEffect(() => {
+    const handlePointerMove = (event) => {
+      const state = touchStateRef.current;
+      if (!state || event.pointerId !== state.pointerId) return;
+      const row = document.elementFromPoint(event.clientX, event.clientY)?.closest('.player-item');
+      if (!row) return;
+      const index = Number(row.dataset.index);
+      if (!Number.isInteger(index) || index === state.index) return;
+      const rect = row.getBoundingClientRect();
+      const targetIndex = event.clientY < rect.top + rect.height / 2 ? index : index + 1;
+      const nextIndex = Math.max(0, Math.min(players.length - 1, targetIndex));
+      if (nextIndex === state.index) return;
+      const reordered = [...players];
+      const [moved] = reordered.splice(state.index, 1);
+      reordered.splice(nextIndex, 0, moved);
+      onReorder(reordered);
+      state.index = nextIndex;
+      setTouchDragIndex(nextIndex);
+      event.preventDefault();
+    };
+    const handlePointerUp = (event) => {
+      if (touchStateRef.current?.pointerId === event.pointerId) {
+        touchStateRef.current = null;
+        setTouchDragIndex(null);
+      }
+    };
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [players, onReorder]);
+
+  const handlePointerDown = (event, index) => {
+    if (event.pointerType !== 'touch') return;
+    const target = event.target.closest('button, a, input, select, textarea');
+    if (target) return;
+    const row = event.currentTarget;
+    const pointerId = event.pointerId;
+    const timer = setTimeout(() => {
+      touchStateRef.current = { pointerId, index, dragging: true };
+      setTouchDragIndex(index);
+      row.setPointerCapture?.(pointerId);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 450);
+    touchStateRef.current = { pointerId, index, timer, dragging: false };
+  };
+
+  const handlePointerCancel = (event) => {
+    const state = touchStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    clearTimeout(state.timer);
+    touchStateRef.current = null;
+    setTouchDragIndex(null);
+  };
 
   const handleDragStart = (e, index) => {
     setDraggedIndex(index);
@@ -73,8 +134,18 @@ export default function PlayerList({
       {players.map((player, index) => (
         <div
           key={player.id}
-          className={`player-item ${currentPlayerIndex === index ? 'current' : ''}`}
-          onClick={() => onPlayPlayer(index)}
+          className={`player-item ${currentPlayerIndex === index ? 'current' : ''} ${touchDragIndex === index ? 'touch-dragging' : ''}`}
+          data-index={index}
+          onClick={(event) => {
+            const state = touchStateRef.current;
+            if (touchDragIndex !== null || state?.timer || state?.dragging) {
+              event.preventDefault();
+              return;
+            }
+            onPlayPlayer(index);
+          }}
+          onPointerDown={(event) => handlePointerDown(event, index)}
+          onPointerCancel={handlePointerCancel}
           onDragOver={(e) => handleDragOver(e, index)}
         >
           <div className="col-order">
