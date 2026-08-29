@@ -21,7 +21,16 @@ export default function PlayerList({
   useEffect(() => {
     const handlePointerMove = (event) => {
       const state = touchStateRef.current;
-      if (!state || !state.dragging || event.pointerId !== state.pointerId) return;
+      if (!state || event.pointerId !== state.pointerId) return;
+      if (!state.dragging) {
+        const movedX = event.clientX - state.startX;
+        const movedY = event.clientY - state.startY;
+        if (Math.hypot(movedX, movedY) > 10) {
+          clearTimeout(state.timer);
+          touchStateRef.current = null;
+        }
+        return;
+      }
       const row = document.elementFromPoint(event.clientX, event.clientY)?.closest('.player-item');
       if (!row) return;
       const index = Number(row.dataset.index);
@@ -62,13 +71,15 @@ export default function PlayerList({
     if (target) return;
     const row = event.currentTarget;
     const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
     const timer = setTimeout(() => {
-      touchStateRef.current = { pointerId, index, dragging: true };
+      touchStateRef.current = { pointerId, index, dragging: true, startX, startY };
       setTouchDragIndex(index);
       row.setPointerCapture?.(pointerId);
       if (navigator.vibrate) navigator.vibrate(30);
     }, 450);
-    touchStateRef.current = { pointerId, index, timer, dragging: false };
+    touchStateRef.current = { pointerId, index, timer, dragging: false, startX, startY };
   };
 
   const handlePointerCancel = (event) => {

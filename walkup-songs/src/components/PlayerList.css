@@ -54,9 +54,8 @@
 .player-item.current {
   background: rgb(37 99 235 / 0.05);
   border-left: 3px solid var(--primary-color);
-}
+}  .player-item.touch-dragging {
 
-.player-item.touch-dragging {
   opacity: 0.7;
   background: var(--bg-secondary);
   box-shadow: 0 4px 12px rgb(15 23 42 / 0.15);
@@ -249,7 +248,7 @@
 
   .player-item {
     display: grid;
-    touch-action: none;
+    touch-action: pan-y;
     -webkit-user-drag: none;
     user-select: none;
     -webkit-user-select: none;
