@@ -30,6 +30,10 @@
 
 .player-item {
   display: grid;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   grid-template-columns: 50px 220px minmax(0, 1fr) 200px;
   gap: 1rem;
   padding: 1rem;
@@ -49,6 +53,13 @@
 .player-item.current {
   background: rgb(37 99 235 / 0.05);
   border-left: 3px solid var(--primary-color);
+}
+
+.player-item.touch-dragging {
+  opacity: 0.7;
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 12px rgb(15 23 42 / 0.15);
+  touch-action: none;
 }
 
 .col-order {
@@ -237,6 +248,9 @@
 
   .player-item {
     display: grid;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
     grid-template-columns: 2rem 60px 1fr auto;
     grid-template-rows: auto auto;
     gap: 0.5rem 0.5rem;
@@ -371,5 +385,13 @@
 
   .player-item .col-actions .drag-handle {
     display: none;
+  }
+
+  .player-item img,
+  .player-item button,
+  .player-item .drag-handle {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 }
