@@ -8,14 +8,11 @@ import PlaybackControls from './components/PlaybackControls';
 import YouTubePlayer from './components/YouTubePlayer';
 import ShareDialog from './components/ShareDialog';
 import ParentView from './components/ParentView';
-import CoachAccountDialog from './components/CoachAccountDialog';
 import {
   createTeam,
   fetchTeam,
   shareUrlForTeam,
-  teamIdFromLocation,
-  getCurrentCoach,
-  syncAccountTeam
+  teamIdFromLocation
 } from './utils/api';
 import {
   listSongs,
@@ -59,20 +56,12 @@ function App() {
   const [sharedTeamId, setSharedTeamId] = useState(null); // coach's own shared id
   const [shareLink, setShareLink] = useState(null);       // generated URL for the coach
   const [shareStatus, setShareStatus] = useState('');     // coach-facing status text
-  const [shareDismissed, setShareDismissed] = useState(false); // hide the status box (link stays live)
+  const [shareDismissed, setShareDismissed] = useState(true); // show only after Share with Parents is clicked
   const [pendingUpdates, setPendingUpdates] = useState({}); // playerId -> remote player data
   const [publishingCoachChange, setPublishingCoachChange] = useState(false);
-  const [showCoachAccount, setShowCoachAccount] = useState(false);
-  const [coachAccount, setCoachAccount] = useState(null);
 
   // Parent mode: URL is /team/<id> — render the simple parent view instead.
   const parentTeamId = teamIdFromLocation();
-
-  useEffect(() => {
-    getCurrentCoach().then((result) => {
-      if (result.authenticated) setCoachAccount(result);
-    }).catch(() => {});
-  }, []);
 
   const currentTeam = storage.currentTeam;
   const players = currentTeam?.players || [];
@@ -107,10 +96,10 @@ function App() {
     const storedId = currentTeam.sharedTeamId || null;
     setSharedTeamId(storedId);
     setShareLink(storedId ? shareUrlForTeam(storedId) : null);
-    if (storedId && !shareStatus) {
-      setShareStatus('Your team link is ready — send it to parents:');
-      setShareDismissed(false);
-    }
+    // Keep the link available for sharing without repeatedly presenting the
+    // status box after refreshes or team switches. The box is shown only when
+    // the coach explicitly clicks Share with Parents.
+    setShareDismissed(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTeam?.id]);
 
@@ -338,10 +327,6 @@ function App() {
       if (!stillUsed) {
         handleRemoveOffline(oldKey);
       }
-    }
-
-    if (coachAccount?.email && currentTeam.sharedTeamId) {
-      syncAccountTeam({ sharedTeamId: currentTeam.sharedTeamId, name: currentTeam.name, players: (currentTeam.players || []).map((p) => String(p.id) === String(playerData.id || editingPlayer?.id) ? { ...p, ...playerData } : p) }).catch((error) => console.error('Account sync failed:', error));
     }
 
     // Publish coach song edits automatically when this team already has a
@@ -745,13 +730,6 @@ function App() {
             </button>
           )}
           <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowCoachAccount(true)}
-            title="Coach account"
-          >
-            {coachAccount ? 'Account' : 'Sign in'}
-          </button>
-          <button
             className="btn btn-secondary btn-sm share-btn"
             onClick={() => setShowShareDialog(true)}
             title="Share team data"
@@ -913,25 +891,6 @@ function App() {
       </div>
 
       <YouTubePlayer />
-
-      {showCoachAccount && (
-        <CoachAccountDialog
-          team={currentTeam}
-          onClose={() => setShowCoachAccount(false)}
-          onConnected={(connectedId, restored) => {
-            setCoachAccount((current) => current || { email: 'signed-in coach' });
-            if (restored) {
-              storage.updateTeam(currentTeam.id, {
-                name: restored.name,
-                players: restored.players,
-                sharedTeamId: connectedId
-              });
-            } else if (connectedId) {
-              storage.updateTeam(currentTeam.id, { sharedTeamId: connectedId });
-            }
-          }}
-        />
-      )}
 
       {showShareDialog && (
         <ShareDialog
