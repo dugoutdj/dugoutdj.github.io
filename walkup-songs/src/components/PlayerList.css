@@ -17,7 +17,7 @@
 
 .player-list-header {
   display: grid;
-  grid-template-columns: 50px auto 1fr 200px;
+  grid-template-columns: 50px 220px minmax(0, 1fr) 200px;
   gap: 1rem;
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
@@ -30,7 +30,7 @@
 
 .player-item {
   display: grid;
-  grid-template-columns: 50px auto 1fr 200px;
+  grid-template-columns: 50px 220px minmax(0, 1fr) 200px;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
@@ -87,6 +87,7 @@
 .song-info {
   display: flex;
   align-items: center;
+  min-height: 60px;
   gap: 0.75rem;
   font-size: 0.8125rem;
 }
@@ -216,7 +217,7 @@
 @media (max-width: 1024px) {
   .player-list-header,
   .player-item {
-    grid-template-columns: 40px auto 1fr 180px;
+    grid-template-columns: 40px 190px minmax(0, 1fr) 180px;
     gap: 0.75rem;
   }
 
