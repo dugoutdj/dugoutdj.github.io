@@ -348,12 +348,14 @@ export default function ParentView({ teamId }) {
                     <span className="parent-song">
                       {player.songTitle || 'No song selected'}
                     </span>
-                    {player.lastChangedBy === 'coach' && (
-                      <span className="parent-coach-update">Coach updated</span>
-                    )}
                     {(player.songSource || player.songVideoId || player.songTitle) && (
-                      <span className="parent-window">
-                        Starts at {formatTime(player.startTime)} · {player.duration || 0}s
+                      <span className="parent-window-row">
+                        <span className="parent-window">
+                          Starts at {formatTime(player.startTime)} · {player.duration || 0}s
+                        </span>
+                        {player.lastChangedBy === 'coach' && (
+                          <span className="parent-coach-update">Coach updated</span>
+                        )}
                       </span>
                     )}
                   </span>

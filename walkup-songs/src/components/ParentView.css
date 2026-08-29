@@ -171,9 +171,17 @@
 .parent-coach-update {
   display: inline-block;
   margin-top: 0.15rem;
-  color: #15803d;
+  color: var(--text-secondary);
   font-size: 0.72rem;
-  font-weight: 600;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.parent-window-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .parent-song {

@@ -115,8 +115,23 @@
   white-space: nowrap;
 }
 
+.song-time-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .song-time {
   color: var(--text-secondary);
+}
+
+.coach-update-badge {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .pending-update-badge {
@@ -296,9 +311,17 @@
     line-height: 1.2;
   }
 
+  .song-time-row {
+    gap: 0.375rem;
+  }
+
   .song-time {
     font-size: 0.6875rem;
     color: var(--text-secondary);
+  }
+
+  .coach-update-badge {
+    font-size: 0.625rem;
   }
 
   /* Actions - right column, centered vertically */

@@ -106,12 +106,14 @@ export default function PlayerList({
                     {pendingUpdates[player.id] && (
                       <span className="pending-update-badge">Updated ✓</span>
                     )}
+                  </span>
+                  <span className="song-time-row">
+                    <span className="song-time">
+                      {formatTime(player.startTime)} ({player.duration}s)
+                    </span>
                     {player.lastChangedBy === 'coach' && (
                       <span className="coach-update-badge">Coach updated</span>
                     )}
-                  </span>
-                  <span className="song-time">
-                    {formatTime(player.startTime)} ({player.duration}s)
                   </span>
                   {downloading[songKey(player)] && (
                     <span className="offline-status">
