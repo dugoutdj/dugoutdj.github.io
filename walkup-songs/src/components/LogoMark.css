@@ -1,0 +1,53 @@
+/* Dugout DJ logo mark (v3): a speaker whose subwoofer cone is a baseball.
+   The ball drives in and out like a sub pushing bass; sound waves pulse
+   beside the cabinet. */
+
+.logo-mark {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.logo-mark-cone,
+.logo-mark-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Bass "kick": the cone punches out and settles, twice per loop */
+.logo-mark.is-animated .logo-mark-cone {
+  animation: logo-mark-thump 1.1s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
+}
+
+@keyframes logo-mark-thump {
+  0%, 100% { transform: translateY(0) scale(1); }
+  9%  { transform: translateY(-1.6px) scaleX(1.025) scaleY(0.97); }
+  20% { transform: translateY(0.4px) scale(1); }
+  33% { transform: translateY(0) scale(1); }
+  42% { transform: translateY(-1.1px) scaleX(1.015) scaleY(0.985); }
+  52% { transform: translateY(0.2px) scale(1); }
+  65%, 100% { transform: translateY(0) scale(1); }
+}
+
+/* Sound waves swell on each kick */
+.logo-mark.is-animated .logo-mark-wave {
+  animation: logo-mark-wave-pulse 1.1s ease-in-out infinite;
+}
+
+.logo-mark.is-animated .logo-mark-wave.is-2 {
+  animation-delay: 0.14s;
+}
+
+@keyframes logo-mark-wave-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.92); }
+  12% { opacity: 1; transform: scale(1); }
+  40% { opacity: 0.55; transform: scale(0.98); }
+  65%, 100% { opacity: 0.25; transform: scale(0.92); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark.is-animated .logo-mark-cone,
+  .logo-mark.is-animated .logo-mark-wave {
+    animation: none;
+  }
+}

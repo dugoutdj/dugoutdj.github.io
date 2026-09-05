@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { claimAccountTeam, fetchAccountTeams, getCurrentCoach, logoutCoach, requestLoginLink, verifyLoginToken } from '../utils/api';
 import './CoachAccountDialog.css';
 
-export default function CoachAccountDialog({ team, onClose, onConnected }) {
+export default function CoachAccountDialog({ team, onClose, onConnected, onSignedOut }) {
   const hasAnonymousTeam = Boolean(team?.players?.length);
 
   const [coach, setCoach] = useState(null);
@@ -62,7 +62,12 @@ export default function CoachAccountDialog({ team, onClose, onConnected }) {
     finally { setBusy(false); }
   };
 
-  const signOut = async () => { await logoutCoach(); setCoach(null); setStatus('Signed out.'); };
+  const signOut = async () => {
+    await logoutCoach();
+    setCoach(null);
+    setStatus('Signed out.');
+    if (onSignedOut) onSignedOut();
+  };
 
   return <div className="coach-account-overlay" onClick={onClose}>
     <div className="coach-account-dialog" onClick={(event) => event.stopPropagation()}>

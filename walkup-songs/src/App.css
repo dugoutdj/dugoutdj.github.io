@@ -501,3 +501,34 @@
     justify-content: center;
   }
 }
+
+/* Splash shown while the coach session is being checked at first load. */
+.auth-splash {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1220;
+}
+
+.auth-splash-card {
+  text-align: center;
+  color: #e2e8f0;
+}
+
+.auth-splash-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  background: #f8fafc;
+  margin: 0 auto 0.6rem;
+}
+
+.auth-splash-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}

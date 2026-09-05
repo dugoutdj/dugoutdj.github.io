@@ -9,13 +9,16 @@ import YouTubePlayer from './components/YouTubePlayer';
 import ShareDialog from './components/ShareDialog';
 import ParentView from './components/ParentView';
 import CoachAccountDialog from './components/CoachAccountDialog';
+import Landing from './components/Landing';
+import LogoMark from './components/LogoMark';
 import {
   createTeam,
   fetchTeam,
   shareUrlForTeam,
   teamIdFromLocation,
   getCurrentCoach,
-  syncAccountTeam
+  syncAccountTeam,
+  claimAccountTeam
 } from './utils/api';
 import {
   listSongs,
@@ -89,15 +92,16 @@ function App() {
   const [pendingUpdates, setPendingUpdates] = useState({}); // playerId -> remote player data
   const [publishingCoachChange, setPublishingCoachChange] = useState(false);
   const [showCoachAccount, setShowCoachAccount] = useState(false);
-  const [coachAccount, setCoachAccount] = useState(null);
+  // undefined = session still being checked, null = signed out (landing page).
+  const [coachAccount, setCoachAccount] = useState(undefined);
 
   // Parent mode: URL is /team/<id> — render the simple parent view instead.
   const parentTeamId = teamIdFromLocation();
 
   useEffect(() => {
     getCurrentCoach().then((result) => {
-      if (result.authenticated) setCoachAccount(result);
-    }).catch(() => {});
+      setCoachAccount(result && result.authenticated ? result : null);
+    }).catch(() => setCoachAccount(null));
   }, []);
 
   const currentTeam = storage.currentTeam;
@@ -477,6 +481,16 @@ function App() {
         ...(currentTeam.sharedTeamId ? { teamId: currentTeam.sharedTeamId } : {})
       };
       const { teamId } = await createTeam(payload);
+      // Back the shared team up to the coach account so edits sync and the
+      // roster can be restored from another device. Best-effort: if this
+      // fails the parent link still works and the next account sync retries.
+      if (coachAccount?.email) {
+        claimAccountTeam({
+          sharedTeamId: teamId,
+          name: currentTeam.name,
+          players: players.map(toSharedPlayer)
+        }).catch((err) => console.error('Account backup failed:', err));
+      }
       const url = shareUrlForTeam(teamId);
       setSharedTeamId(teamId);
       setShareLink(url);
@@ -736,6 +750,29 @@ function App() {
     return <ParentView teamId={parentTeamId} />;
   }
 
+  // The coach app requires an account. While the session is being checked we
+  // show a brief splash; signed-out visitors land on the public landing page.
+  if (coachAccount === undefined) {
+    return (
+      <div className="auth-splash">
+        <div className="auth-splash-card">
+          <span className="auth-splash-mark">
+            <LogoMark size={44} />
+          </span>
+          <p>Loading Dugout DJ…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!coachAccount) {
+    return (
+      <Landing
+        onSignedIn={(email) => setCoachAccount({ authenticated: true, email })}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -971,6 +1008,7 @@ function App() {
         <CoachAccountDialog
           team={currentTeam}
           onClose={() => setShowCoachAccount(false)}
+          onSignedOut={() => setCoachAccount(null)}
           onConnected={(connectedId, restored) => {
             setCoachAccount((current) => current || { email: 'signed-in coach' });
             if (restored) {
