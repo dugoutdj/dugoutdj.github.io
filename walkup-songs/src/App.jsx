@@ -8,11 +8,14 @@ import PlaybackControls from './components/PlaybackControls';
 import YouTubePlayer from './components/YouTubePlayer';
 import ShareDialog from './components/ShareDialog';
 import ParentView from './components/ParentView';
+import CoachAccountDialog from './components/CoachAccountDialog';
 import {
   createTeam,
   fetchTeam,
   shareUrlForTeam,
-  teamIdFromLocation
+  teamIdFromLocation,
+  getCurrentCoach,
+  syncAccountTeam
 } from './utils/api';
 import {
   listSongs,
@@ -22,6 +25,7 @@ import {
 } from './utils/offlineLibrary';
 import { downloadPreview } from './utils/previewDownloader';
 import { songKey } from './utils/song';
+import { rememberSong, recordPlay } from './utils/songHistory';
 import { playAnnouncement, stopAnnouncement, preloadAnnouncements } from './utils/announcer';
 import './App.css';
 
@@ -36,6 +40,30 @@ function friendlySaveError(message) {
   return trimmed || 'download failed';
 }
 
+// Fields sent to the shared parent roster and the coach account. The player's
+// song history travels with it so parents can re-pick a past song+window and
+// play counts survive the round trip.
+function toSharedPlayer(p) {
+  return {
+    id: String(p?.id ?? ''),
+    name: String(p?.name ?? ''),
+    pronounced: String(p?.pronounced || p?.name || ''),
+    number: String(p?.number || ''),
+    songTitle: String(p?.songTitle || ''),
+    previewUrl: String(p?.previewUrl || ''),
+    artworkUrl: String(p?.artworkUrl || ''),
+    appleTrackId: String(p?.appleTrackId || ''),
+    songVideoId: String(p?.songVideoId || ''),
+    songThumbnail: String(p?.songThumbnail || ''),
+    startTime: Number(p?.startTime) || 0,
+    duration: Number(p?.duration) || 10,
+    songSource: p?.songSource === 'apple' ? 'apple' : (p?.songSource === 'youtube' ? 'youtube' : ''),
+    updatedAt: Number(p?.updatedAt) || Date.now(),
+    lastChangedBy: p?.lastChangedBy || 'coach',
+    history: Array.isArray(p?.history) ? p.history : []
+  };
+}
+
 function App() {
   const storage = useLocalStorage();
   const player = useYouTubePlayer();
@@ -46,6 +74,7 @@ function App() {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
   const playbackRequestRef = useRef(0);
   const activePlayerIdRef = useRef(null);
+  const playSyncTimerRef = useRef(null); // debounce for history re-publish after taps
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Start collapsed
   const [offlineSongs, setOfflineSongs] = useState({}); // videoId -> { size, savedAt, title }
   const [downloading, setDownloading] = useState({}); // videoId -> true
@@ -59,9 +88,17 @@ function App() {
   const [shareDismissed, setShareDismissed] = useState(true); // show only after Share with Parents is clicked
   const [pendingUpdates, setPendingUpdates] = useState({}); // playerId -> remote player data
   const [publishingCoachChange, setPublishingCoachChange] = useState(false);
+  const [showCoachAccount, setShowCoachAccount] = useState(false);
+  const [coachAccount, setCoachAccount] = useState(null);
 
   // Parent mode: URL is /team/<id> — render the simple parent view instead.
   const parentTeamId = teamIdFromLocation();
+
+  useEffect(() => {
+    getCurrentCoach().then((result) => {
+      if (result.authenticated) setCoachAccount(result);
+    }).catch(() => {});
+  }, []);
 
   const currentTeam = storage.currentTeam;
   const players = currentTeam?.players || [];
@@ -288,6 +325,15 @@ function App() {
     // apply back over the coach's newer edit.
     playerData = { ...playerData, updatedAt: Date.now(), lastChangedBy: 'coach' };
 
+    // Keep a per-player history of every song + window the coach has used.
+    // Fold the current selection into the history before saving so the
+    // previous-songs list always reflects the latest fine-tuning.
+    const priorPlayer = editingPlayer
+      ? (currentTeam.players || []).find((pl) => String(pl.id) === String(editingPlayer.id))
+      : null;
+    const history = rememberSong(priorPlayer?.history, playerData);
+    playerData = { ...playerData, history };
+
     const oldKey = editingPlayer ? songKey(editingPlayer) : null;
 
     if (editingPlayer) {
@@ -332,6 +378,10 @@ function App() {
     // Publish coach song edits automatically when this team already has a
     // parent link. The local save remains immediate; publishing is best-effort
     // and does not block the coach from continuing to use the roster.
+    if (coachAccount?.email && currentTeam.sharedTeamId) {
+      syncAccountTeam({ sharedTeamId: currentTeam.sharedTeamId, name: currentTeam.name, players: (currentTeam.players || []).map((p) => String(p.id) === String(playerData.id || editingPlayer?.id) ? { ...p, ...playerData } : p) }).catch((error) => console.error('Account sync failed:', error));
+    }
+
     if (currentTeam.sharedTeamId && playerData.songTitle) {
       setPublishingCoachChange(true);
       const publishedTeam = {
@@ -352,23 +402,7 @@ function App() {
     if (!team?.sharedTeamId || !team.players?.length) return;
     const payload = {
       name: team.name,
-      players: team.players.map((p) => ({
-        id: p.id,
-        name: p.name,
-        pronounced: p.pronounced || p.name || '',
-        number: p.number || '',
-        songTitle: p.songTitle || '',
-        previewUrl: p.previewUrl || '',
-        artworkUrl: p.artworkUrl || '',
-        appleTrackId: p.appleTrackId || '',
-        songVideoId: p.songVideoId || '',
-        songThumbnail: p.songThumbnail || '',
-        startTime: p.startTime || 0,
-        duration: p.duration || 10,
-        songSource: p.songSource || '',
-        updatedAt: p.updatedAt || Date.now(),
-        lastChangedBy: p.lastChangedBy || 'coach'
-      })),
+      players: team.players.map(toSharedPlayer),
       teamId: team.sharedTeamId
     };
     await createTeam(payload);
@@ -403,6 +437,31 @@ function App() {
     storage.reorderPlayers(currentTeam.id, reorderedPlayers);
   };
 
+  // After a counted roster tap the play count is already saved locally; this
+  // quietly refreshes the shared copies (parent link + coach account) a beat
+  // later so parents and other devices see the same history. Best-effort:
+  // offline or transient errors are swallowed — the next tap or share re-syncs.
+  const queueRosterSync = (nextPlayers) => {
+    if (!currentTeam?.sharedTeamId || !nextPlayers?.length) return;
+    if (playSyncTimerRef.current) clearTimeout(playSyncTimerRef.current);
+    playSyncTimerRef.current = setTimeout(() => {
+      const payload = {
+        name: currentTeam.name,
+        players: nextPlayers.map(toSharedPlayer),
+        teamId: currentTeam.sharedTeamId
+      };
+      createTeam(payload).catch((err) => console.error('History sync failed:', err));
+      if (coachAccount?.email) {
+        syncAccountTeam(payload).catch((err) => console.error('Account sync failed:', err));
+      }
+    }, 1200);
+  };
+
+  // Flush any pending roster re-publish when the app unmounts.
+  useEffect(() => () => {
+    if (playSyncTimerRef.current) clearTimeout(playSyncTimerRef.current);
+  }, []);
+
   // Post the current team to the Cloudflare API and give the coach a link to
   // share with parents.
   const handleShareWithParents = async () => {
@@ -413,23 +472,7 @@ function App() {
     try {
       const payload = {
         name: currentTeam.name,
-        players: players.map((p) => ({
-          id: p.id,
-          name: p.name,
-          pronounced: p.pronounced || p.name || '',
-          number: p.number || '',
-          songTitle: p.songTitle || '',
-          previewUrl: p.previewUrl || '',
-          artworkUrl: p.artworkUrl || '',
-          appleTrackId: p.appleTrackId || '',
-          songVideoId: p.songVideoId || '',
-          songThumbnail: p.songThumbnail || '',
-          startTime: p.startTime || 0,
-          duration: p.duration || 10,
-          songSource: p.songSource || '',
-          updatedAt: p.updatedAt || Date.now(),
-          lastChangedBy: p.lastChangedBy || 'coach'
-        })),
+        players: players.map(toSharedPlayer),
         // Reuse the existing shared id so the URL never changes.
         ...(currentTeam.sharedTeamId ? { teamId: currentTeam.sharedTeamId } : {})
       };
@@ -551,7 +594,7 @@ function App() {
     }
   };
 
-  const handlePlayPlayer = (index) => {
+  const handlePlayPlayer = (index, countPlay = false) => {
     const targetPlayer = players[index];
     if (!targetPlayer || !songKey(targetPlayer)) return;
 
@@ -564,6 +607,20 @@ function App() {
       player.stopSong();
       setCurrentPlayerIndex(null);
       return;
+    }
+
+    // Only a tap on the roster row counts as a walk-up play (Next/Previous/
+    // Replay and the mini-player do not). Increment the play count of the
+    // current song+window combo in the player's history and quietly refresh
+    // the shared roster so the counts stay in sync.
+    if (countPlay) {
+      const history = recordPlay(targetPlayer.history, targetPlayer);
+      storage.updatePlayer(currentTeam.id, targetPlayer.id, { history });
+      queueRosterSync(
+        (currentTeam.players || []).map((pl) =>
+          String(pl.id) === String(targetPlayer.id) ? { ...targetPlayer, history } : pl
+        )
+      );
     }
 
     playbackRequestRef.current += 1;
@@ -730,6 +787,13 @@ function App() {
             </button>
           )}
           <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowCoachAccount(true)}
+            title="Coach account"
+          >
+            {coachAccount ? 'Account' : 'Sign in'}
+          </button>
+          <button
             className="btn btn-secondary btn-sm share-btn"
             onClick={() => setShowShareDialog(true)}
             title="Share team data"
@@ -885,7 +949,7 @@ function App() {
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
                 onReorder={handleReorderPlayers}
-                onPlayPlayer={handlePlayPlayer}
+                onPlayPlayer={(index) => handlePlayPlayer(index, true)}
                 downloading={downloading}
                 saveStatus={saveStatus}
                 pendingUpdates={pendingUpdates}
@@ -902,6 +966,25 @@ function App() {
       </div>
 
       <YouTubePlayer />
+
+      {showCoachAccount && (
+        <CoachAccountDialog
+          team={currentTeam}
+          onClose={() => setShowCoachAccount(false)}
+          onConnected={(connectedId, restored) => {
+            setCoachAccount((current) => current || { email: 'signed-in coach' });
+            if (restored) {
+              storage.updateTeam(currentTeam.id, {
+                name: restored.name,
+                players: restored.players,
+                sharedTeamId: connectedId
+              });
+            } else if (connectedId) {
+              storage.updateTeam(currentTeam.id, { sharedTeamId: connectedId });
+            }
+          }}
+        />
+      )}
 
       {showShareDialog && (
         <ShareDialog

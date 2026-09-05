@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { formatTime, extractVideoId, fetchVideoInfo, getVideoDuration, loadYouTubeAPI } from '../utils/youtube';
 import { searchTracks } from '../utils/previewDownloader';
 import { mediaProxy } from '../utils/media';
+import { sortHistory, songComboKey } from '../utils/songHistory';
 import { playAnnouncement, stopAnnouncement } from '../utils/announcer';
 import './PlayerForm.css';
 
@@ -102,6 +103,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   const audioRef = useRef(null);
   // Live preview of the "Now batting, ...!" announcement.
   const [announcePreviewing, setAnnouncePreviewing] = useState(false);
+  // Previous song+window picker (collapsed by default).
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (player) {
@@ -518,6 +521,52 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     playAnnouncement(name, formData.number).then(() => setAnnouncePreviewing(false));
   };
 
+  // --- Previous song+window history -------------------------------------
+  // Every distinct (song, start, duration) the player has used, most-played
+  // first. Shown inside the song picker so the coach or a parent can restore
+  // an exact past selection with one tap.
+  const historyRows = sortHistory(player?.history).filter((h) => h && h.songTitle);
+
+  const isActiveHistoryEntry = (entry) => (
+    String(entry?.appleTrackId || '') === String(formData.appleTrackId || '') &&
+    String(entry?.songVideoId || '') === String(formData.songVideoId || '') &&
+    Math.floor(Number(entry?.startTime) || 0) === Math.floor(Number(formData.startTime) || 0) &&
+    Math.floor(Number(entry?.duration) || 0) === Math.floor(Number(formData.duration) || 0)
+  );
+
+  // Restore a previous song+window combo into the form. The user still hits
+  // Save to apply it to the player.
+  const applyHistoryEntry = (entry) => {
+    stopPreview();
+    stopAnnouncePreview();
+    const isYt = Boolean(entry.songVideoId) && entry.songSource !== 'apple';
+    setFormData((prev) => ({
+      ...prev,
+      songSource: isYt ? 'youtube' : 'apple',
+      songVideoId: entry.songVideoId || '',
+      appleTrackId: entry.appleTrackId || '',
+      songUrl: entry.songUrl || '',
+      previewUrl: entry.previewUrl || '',
+      artworkUrl: entry.artworkUrl || '',
+      songThumbnail: entry.songThumbnail || '',
+      songTitle: entry.songTitle || prev.songTitle,
+      startTime: Number(entry.startTime) || 0,
+      duration: Math.max(1, Number(entry.duration) || WINDOW_SECONDS)
+    }));
+    if (isYt) {
+      // Re-read the video's length so the manual start/length fields show
+      // sensible limits, and warm the hidden preview player (iOS).
+      setYtDuration(null);
+      ytDurationVideoRef.current = entry.songVideoId;
+      setYtStartText(formatStartText(Number(entry.startTime) || 0));
+      getVideoDuration(entry.songVideoId).then((d) => {
+        if (ytDurationVideoRef.current === entry.songVideoId) setYtDuration(d);
+      });
+      getYtPreviewPlayer().catch(() => {});
+    }
+    setShowHistory(false);
+  };
+
   // Window geometry over the source's total length (30s Apple preview, or
   // the full YouTube video). The slider is used for Apple songs; YouTube
   // songs use manual start/length inputs instead (a multi-minute track makes
@@ -652,6 +701,57 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
               start and length below.
             </small>
           </div>
+
+          {historyRows.length > 0 && (
+            <div className="song-history">
+              <button
+                type="button"
+                className="song-history-toggle"
+                onClick={() => setShowHistory((v) => !v)}
+                aria-expanded={showHistory}
+              >
+                <span className="song-history-toggle-label">
+                  🕘 Previous songs ({historyRows.length})
+                </span>
+                <span className="song-history-caret">{showHistory ? '▴' : '▾'}</span>
+              </button>
+              {showHistory && (
+                <ul className="song-history-list">
+                  {historyRows.map((entry) => {
+                    const active = isActiveHistoryEntry(entry);
+                    const thumb = entry.songSource === 'apple' && entry.artworkUrl
+                      ? mediaProxy(String(entry.artworkUrl).replace('100x100', '600x600'))
+                      : (entry.songThumbnail || null);
+                    return (
+                      <li
+                        key={songComboKey(entry) || `${entry.songTitle}-${entry.startTime}-${entry.duration}`}
+                        className={`song-history-row${active ? ' is-active' : ''}`}
+                        title={active
+                          ? 'This is the section currently loaded below'
+                          : 'Tap to load this exact song and section'}
+                        onClick={() => { if (!active) applyHistoryEntry(entry); }}
+                      >
+                        {thumb && <img src={thumb} alt="" className="song-history-thumb" />}
+                        <span className="song-history-info">
+                          <span className="song-history-title">{entry.songTitle}</span>
+                          <span className="song-history-meta">
+                            ▶ {formatTime(Number(entry.startTime) || 0)} · {Number(entry.duration) || 0}s
+                            {isActiveHistoryEntry(entry) ? ' · current' : ''}
+                          </span>
+                        </span>
+                        <span
+                          className="song-history-plays"
+                          title="How many times the coach played this exact section"
+                        >
+                          {active ? '✓' : `${Number(entry.plays) || 0}×`}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
           </div>
         </div>
 

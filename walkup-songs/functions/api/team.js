@@ -1,6 +1,6 @@
 // POST /api/team — create or refresh a team's shared roster in KV.
 // Body: { name, players: [{ id, name, number, songTitle, previewUrl,
-//         artworkUrl, appleTrackId, startTime, duration, songSource }] }
+//         artworkUrl, appleTrackId, startTime, duration, songSource, history }] }
 // Returns: { teamId }
 
 const ALLOWED_ORIGIN = '*';
@@ -43,7 +43,10 @@ function sanitizePlayer(p) {
     duration: Number(p.duration) || 10,
     songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : ''),
     updatedAt: Number(p.updatedAt) || Date.now(),
-    lastChangedBy: p.lastChangedBy === 'coach' ? 'coach' : 'parent'
+    lastChangedBy: p.lastChangedBy === 'coach' ? 'coach' : 'parent',
+    // Per-player song+window history (with coach play counts) rides along so
+    // parents can re-pick a past selection and counts survive round trips.
+    history: Array.isArray(p.history) ? p.history : []
   };
 }
 

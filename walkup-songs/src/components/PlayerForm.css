@@ -511,3 +511,114 @@
   font-size: 0.875rem;
   font-weight: 500;
 }
+
+/* Previous songs picker — every song+window the player has used, most-played
+   first. Lives inside the bordered Apple/YouTube song selection area. */
+.song-history {
+  margin-top: 0.875rem;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 0.625rem;
+}
+
+.song-history-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  color: var(--text-primary, #0f172a);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.song-history-caret {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8rem;
+}
+
+.song-history-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 13rem;
+  overflow-y: auto;
+}
+
+.song-history-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--bg-primary, #fff);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.song-history-row:active {
+  background: #eef2ff;
+}
+
+.song-history-row.is-active {
+  background: #f0fdf4;
+  cursor: default;
+  border-color: #bbf7d0;
+}
+
+.song-history-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.375rem;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #e2e8f0;
+}
+
+.song-history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.song-history-title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-history-meta {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #64748b);
+}
+
+.song-history-plays {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #334155;
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.song-history-row.is-active .song-history-plays {
+  background: #dcfce7;
+  color: #166534;
+}
