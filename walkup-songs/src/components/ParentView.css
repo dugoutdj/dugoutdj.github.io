@@ -11,6 +11,13 @@
   margin-bottom: 1.5rem;
 }
 
+.parent-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .parent-title h1 {
   font-size: 1.5rem;
   font-weight: 700;

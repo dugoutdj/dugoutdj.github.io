@@ -787,6 +787,7 @@ function App() {
           </button>
 
           <div className="app-title">
+            <LogoMark size={30} />
             <h1 title="Walk-Up Song Manager">Dugout DJ</h1>
           </div>
         </div>

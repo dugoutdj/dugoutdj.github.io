@@ -4,6 +4,7 @@ import { playerArtwork } from '../utils/song';
 import { mediaProxy } from '../utils/media';
 import { formatTime, loadYouTubeAPI } from '../utils/youtube';
 import PlayerForm from './PlayerForm';
+import LogoMark from './LogoMark';
 import './ParentView.css';
 
 // Simplified view for parents opening a shared /team/<id> link. Shows the
@@ -277,6 +278,7 @@ export default function ParentView({ teamId }) {
     <div className="parent-view">
       <header className="parent-header">
         <div className="parent-title">
+          <LogoMark size={40} />
           <h1>Dugout DJ</h1>
           <p className="parent-team-name">{team.name} — song updates</p>
         </div>
