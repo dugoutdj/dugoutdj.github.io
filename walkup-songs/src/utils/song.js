@@ -1,7 +1,7 @@
 // Shared helpers for a player's song. A player can have either:
 //   - an Apple Music track (songSource: 'apple', with appleTrackId/previewUrl),
-//     or
-//   - a legacy YouTube video (songVideoId).
+//   - a legacy YouTube video (songVideoId), or
+//   - an uploaded MP3 clip (songSource: 'mp3', with mp3Key).
 // `songKey` is the stable identifier used for offline storage and playback
 // lookups. Apple keys are prefixed so they can never collide with a video ID.
 
@@ -13,6 +13,11 @@ export function songKey(player) {
   if (!player) return null;
   if (player.songSource === 'apple') {
     return player.appleTrackId ? `apple:${player.appleTrackId}` : null;
+  }
+  // Uploaded MP3 clips are keyed by their R2 object key so they can never
+  // collide with an Apple track id or a YouTube video id.
+  if (player.songSource === 'mp3') {
+    return player.mp3Key ? `mp3:${player.mp3Key}` : null;
   }
   // Treat a video id as a YouTube song even when older shared records have
   // an empty or inconsistent songSource value.

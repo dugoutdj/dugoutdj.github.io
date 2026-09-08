@@ -18,8 +18,11 @@ export function songComboKey(player) {
 function baseEntry(player, now) {
   const p = player || {};
   return {
-    songSource: p.songSource === 'apple' ? 'apple' : (p.songVideoId ? 'youtube' : (p.songSource === 'youtube' ? 'youtube' : '')),
+    songSource: p.songSource === 'apple' ? 'apple'
+      : (p.songSource === 'mp3' ? 'mp3'
+        : (p.songSource === 'youtube' || p.songVideoId ? 'youtube' : '')),
     songVideoId: p.songVideoId || '',
+    mp3Key: p.mp3Key || '',
     appleTrackId: p.appleTrackId || '',
     songUrl: p.songUrl || '',
     previewUrl: p.previewUrl || '',
@@ -42,6 +45,7 @@ function freshFields(existing, player) {
     artworkUrl: p.artworkUrl || existing.artworkUrl,
     appleTrackId: p.appleTrackId || existing.appleTrackId,
     songVideoId: p.songVideoId || existing.songVideoId,
+    mp3Key: p.mp3Key || existing.mp3Key,
     songThumbnail: p.songThumbnail || existing.songThumbnail,
     songUrl: p.songUrl || existing.songUrl
   };

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatTime, extractVideoId, fetchVideoInfo, getVideoDuration, loadYouTubeAPI } from '../utils/youtube';
-import { searchTracks } from '../utils/previewDownloader';
+import { searchTracks, trimToWindow } from '../utils/previewDownloader';
+import { clipUrl, readAudioDuration, uploadClip, deleteClip } from '../utils/mp3';
 import { mediaProxy } from '../utils/media';
 import { sortHistory, songComboKey } from '../utils/songHistory';
 import { playAnnouncement, stopAnnouncement } from '../utils/announcer';
@@ -63,6 +64,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     artworkUrl: '',
     songTitle: '',
     songThumbnail: '',
+    mp3Key: '',
     startTime: 0,
     duration: 10
   });
@@ -90,9 +92,12 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   // track at the 30s preview; YouTube spans the full video.
   const isApple = formData.songSource === 'apple';
   const isYouTube = !isApple && !!formData.songVideoId;
+  const isMp3 = formData.songSource === 'mp3';
   const totalSeconds = isApple
     ? PREVIEW_SECONDS
-    : ((ytDuration && ytDuration > 0) ? ytDuration : YT_FALLBACK_SECONDS);
+    : (isMp3
+      ? (mp3Duration > 0 ? mp3Duration : 0)
+      : ((ytDuration && ytDuration > 0) ? ytDuration : YT_FALLBACK_SECONDS));
   const maxStart = Math.max(0, totalSeconds - MIN_WINDOW);
   // Set while a handle is being dragged, so the wrapper's click-to-move
   // doesn't fire from the click that ends a drag.
@@ -103,8 +108,24 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   const audioRef = useRef(null);
   // Live preview of the "Now batting, ...!" announcement.
   const [announcePreviewing, setAnnouncePreviewing] = useState(false);
+  // Uploaded MP3 source: the picked file (kept in memory only), its decoded
+  // duration, and a local object URL for previewing before save.
+  const [mp3File, setMp3File] = useState(null);      // { blob, name }
+  const [mp3Duration, setMp3Duration] = useState(0);
+  const [mp3ObjectUrl, setMp3ObjectUrl] = useState(null);
+  const [mp3Error, setMp3Error] = useState(null);
+  const [mp3Uploading, setMp3Uploading] = useState(false);
   // Previous song+window picker (collapsed by default).
   const [showHistory, setShowHistory] = useState(false);
+
+  // Drop any in-memory MP3 selection (switching to Apple/YouTube, unmount).
+  const clearMp3Selection = () => {
+    if (mp3ObjectUrl) URL.revokeObjectURL(mp3ObjectUrl);
+    setMp3File(null);
+    setMp3Duration(0);
+    setMp3ObjectUrl(null);
+    setMp3Error(null);
+  };
 
   useEffect(() => {
     if (player) {
@@ -154,6 +175,13 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     };
   }, [onCancel, lockScroll]);
 
+  // Revoke the preview object URL when it is replaced or the form unmounts.
+  useEffect(() => {
+    return () => {
+      if (mp3ObjectUrl) URL.revokeObjectURL(mp3ObjectUrl);
+    };
+  }, [mp3ObjectUrl]);
+
   // Debounced live search against the catalog. The 700ms debounce keeps
   // fast typing to a single request (per-keystroke bursts tripped Apple's
   // rate limiter on the server), and 2+ chars avoids useless one-letter
@@ -188,24 +216,48 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     return () => clearTimeout(timer);
   }, [appleQuery]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!songOnly && !formData.name.trim()) {
       alert('Please enter a player name');
       return;
     }
+    if (mp3Uploading) return;
 
     // The walk-up window lives entirely in formData (startTime + duration),
     // set by the slider above.
     const startTime = Math.max(0, formData.startTime || 0);
     const duration = Math.max(1, formData.duration || WINDOW_SECONDS);
+    let data = { ...formData, startTime, duration };
 
-    onSave({
-      ...formData,
-      startTime,
-      duration
-    });
+    // MP3 songs: cut the picked file to the walk-up window and upload ONLY
+    // that snippet to R2. Re-selecting a file replaces the previous clip.
+    if (data.songSource === 'mp3') {
+      if (mp3File) {
+        setMp3Uploading(true);
+        try {
+          const { blob } = await trimToWindow(mp3File.blob, startTime, duration);
+          const { key } = await uploadClip(blob);
+          const oldKey = formData.mp3Key;
+          data = { ...data, mp3Key: key };
+          if (oldKey && oldKey !== key) {
+            deleteClip(oldKey).catch(() => {});
+          }
+        } catch (err) {
+          setMp3Error(err.message || 'Upload failed — try again.');
+          return;
+        } finally {
+          setMp3Uploading(false);
+        }
+      } else if (!data.mp3Key) {
+        // No file and no existing clip — nothing to save.
+        alert('Select an MP3 file first.');
+        return;
+      }
+    }
+
+    onSave(data);
   };
 
   const selectAppleTrack = (track) => {
@@ -219,11 +271,13 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
       previewUrl: track.previewUrl,
       artworkUrl: track.artworkUrl,
       songTitle: `${track.artistName} - ${track.trackName}`,
+      mp3Key: '',
       startTime: 0,
       duration: WINDOW_SECONDS
     }));
     setAppleQuery('');
     setAppleResults([]);
+    clearMp3Selection();
   };
 
   // Load a pasted YouTube link: extract the video id, fetch its title and
@@ -253,9 +307,11 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
         appleTrackId: '',
         previewUrl: '',
         artworkUrl: '',
+        mp3Key: '',
         startTime: 0,
         duration: WINDOW_SECONDS
       }));
+      clearMp3Selection();
       setYoutubeUrl('');
       // Read the video's length so the slider track spans the whole song,
       // and warm the hidden preview player (iOS needs it ready for the tap).
@@ -270,6 +326,61 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
       setYoutubeError("Couldn't load that video \u2014 check the link and try again.");
     } finally {
       setYoutubeLoading(false);
+    }
+  };
+
+  // Pick an audio file to use as the walk-up song. Only its duration is
+  // read here (to size the window slider); the 5-15s clip is trimmed and
+  // uploaded on Save, so the full file never leaves this device.
+  const handleMp3File = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // allow re-picking the same file
+    if (!file) return;
+    stopPreview();
+    const looksAudio = /^audio\//.test(file.type || '') ||
+      /\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(file.name || '');
+    if (!looksAudio) {
+      setMp3Error('Please choose an audio file (MP3, M4A, WAV, …).');
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      setMp3Error('That file is larger than 30 MB — try a shorter clip.');
+      return;
+    }
+    setMp3Error(null);
+    try {
+      const duration = await readAudioDuration(file);
+      if (!duration || duration < MIN_WINDOW) {
+        setMp3Error("Couldn't read that audio file — is it a valid song?");
+        return;
+      }
+      if (mp3ObjectUrl) URL.revokeObjectURL(mp3ObjectUrl);
+      const title = (file.name || 'Uploaded song')
+        .replace(/\.[^.]+$/, '')
+        .replace(/[-_]+/g, ' ')
+        .trim() || 'Uploaded song';
+      setMp3File({ blob: file, name: file.name });
+      setMp3Duration(duration);
+      setMp3ObjectUrl(URL.createObjectURL(file));
+      setAppleResults([]);
+      setAppleError(null);
+      setYoutubeError(null);
+      setFormData((prev) => ({
+        ...prev,
+        songSource: 'mp3',
+        songUrl: '',
+        songVideoId: '',
+        appleTrackId: '',
+        previewUrl: '',
+        artworkUrl: '',
+        songThumbnail: '',
+        mp3Key: '',
+        songTitle: title,
+        startTime: 0,
+        duration: WINDOW_SECONDS
+      }));
+    } catch {
+      setMp3Error("Couldn't read that audio file — is it a valid song?");
     }
   };
 
@@ -460,18 +571,32 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
       playYtPreview(start, duration);
       return;
     }
+    // Uploaded MP3 clips: a freshly picked file previews from the local
+    // object URL at [start, start+duration); an already-saved clip is
+    // already cut to the window and plays from 0:00.
+    if (isMp3) {
+      const src = mp3ObjectUrl || (formData.mp3Key ? clipUrl(formData.mp3Key) : null);
+      if (!src) return;
+      playAudioWindow(src, mp3ObjectUrl ? start : 0, duration);
+      return;
+    }
     if (!formData.previewUrl) return;
-    const end = start + duration;
+    playAudioWindow(mediaProxy(formData.previewUrl), start, duration);
+  };
 
+  // Play [from, from+length) of an audio URL through the shared audio
+  // element, stopping exactly at the end of the walk-up window.
+  const playAudioWindow = (src, from, length) => {
     if (!audioRef.current) {
       const audio = new Audio();
       audio.preload = 'auto';
       audioRef.current = audio;
     }
     const audio = audioRef.current;
+    const end = from + length;
 
-    audio.src = mediaProxy(formData.previewUrl);
-    audio.currentTime = start;
+    audio.src = src;
+    audio.currentTime = from;
     audio.volume = 1;
 
     const onTime = () => {
@@ -530,6 +655,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   const isActiveHistoryEntry = (entry) => (
     String(entry?.appleTrackId || '') === String(formData.appleTrackId || '') &&
     String(entry?.songVideoId || '') === String(formData.songVideoId || '') &&
+    String(entry?.mp3Key || '') === String(formData.mp3Key || '') &&
     Math.floor(Number(entry?.startTime) || 0) === Math.floor(Number(formData.startTime) || 0) &&
     Math.floor(Number(entry?.duration) || 0) === Math.floor(Number(formData.duration) || 0)
   );
@@ -539,11 +665,13 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   const applyHistoryEntry = (entry) => {
     stopPreview();
     stopAnnouncePreview();
-    const isYt = Boolean(entry.songVideoId) && entry.songSource !== 'apple';
+    const isMp3 = entry.songSource === 'mp3' && !!entry.mp3Key;
+    const isYt = Boolean(entry.songVideoId) && entry.songSource !== 'apple' && !isMp3;
     setFormData((prev) => ({
       ...prev,
-      songSource: isYt ? 'youtube' : 'apple',
+      songSource: isYt ? 'youtube' : (isMp3 ? 'mp3' : 'apple'),
       songVideoId: entry.songVideoId || '',
+      mp3Key: entry.mp3Key || '',
       appleTrackId: entry.appleTrackId || '',
       songUrl: entry.songUrl || '',
       previewUrl: entry.previewUrl || '',
@@ -571,7 +699,10 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   // the full YouTube video). The slider is used for Apple songs; YouTube
   // songs use manual start/length inputs instead (a multi-minute track makes
   // a slider too coarse to pick a 15s window).
-  const sliderUsable = isApple;
+  // The slider works when the source's exact length is known: the 30s Apple
+  // preview, or a freshly picked MP3 file. Existing MP3 clips (already cut)
+  // show a locked summary; YouTube songs keep the manual inputs.
+  const sliderUsable = isApple || (isMp3 && !!mp3File);
   const windowStart = Math.min(formData.startTime || 0, Math.max(0, maxStart));
   const windowDuration = Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, formData.duration || WINDOW_SECONDS));
   const windowEnd = Math.min(windowStart + windowDuration, totalSeconds);
@@ -702,6 +833,28 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
             </small>
           </div>
 
+          <div className="form-divider"><span>OR</span></div>
+
+          <div className="form-group mp3-upload-group">
+            <label>Upload an MP3 file</label>
+            <input
+              type="file"
+              accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg"
+              onChange={handleMp3File}
+              disabled={mp3Uploading}
+            />
+            {mp3File && (
+              <small className="form-hint mp3-loaded-name">
+                Loaded: {mp3File.name} · {formatTime(mp3Duration)} long — pick the walk-up
+                window below, then Save.
+              </small>
+            )}
+            {mp3Error && <small className="search-error-text">{mp3Error}</small>}
+            <small className="form-hint">
+              Only the 5–15 second walk-up clip is stored — the full file never leaves this device.
+            </small>
+          </div>
+
           {historyRows.length > 0 && (
             <div className="song-history">
               <button
@@ -755,16 +908,16 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
           </div>
         </div>
 
-        {(isApple || isYouTube) && formData.songTitle && (
+        {(isApple || isYouTube || isMp3) && formData.songTitle && (
           <div className="video-preview song-loaded-preview">
-            {isYouTube && formData.songThumbnail && (
+            {isYouTube && formData.songThumbnail ? (
               <img src={formData.songThumbnail} alt={formData.songTitle} />
-            )}
-            <small>{isYouTube ? '▶️' : '🎵'} {formData.songTitle}</small>
+            ) : null}
+            <small>{isYouTube ? '▶️' : (isMp3 ? '📁' : '🎵')} {formData.songTitle}</small>
           </div>
         )}
 
-        {(isApple || isYouTube) && (
+        {(isApple || isYouTube || isMp3) && (
           <div className="form-group preview-window-group">
             <label>Pick the walk-up window (5–15s)</label>
             {sliderUsable ? (
@@ -821,6 +974,15 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
                   <span>⏹ {formatTime(windowEnd)}</span>
                 </div>
               </>
+            ) : isMp3 ? (
+              <div className="mp3-window-locked">
+                <span>
+                  ▶ {formatTime(Math.max(0, Number(formData.startTime) || 0))} · {windowDuration}s · ⏹ {formatTime(Math.max(0, Number(formData.startTime) || 0) + windowDuration)}
+                </span>
+                <small className="form-hint">
+                  To change this section, select the MP3 file again above.
+                </small>
+              </div>
             ) : (
               <>
                 <div className="youtube-window-row">
@@ -869,7 +1031,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
               </>
             )}
 
-            {((isApple && formData.previewUrl) || (isYouTube && formData.songVideoId)) && (
+            {((isApple && formData.previewUrl) || (isYouTube && formData.songVideoId) || (isMp3 && (mp3File || formData.mp3Key))) && (
               <button
                 type="button"
                 className={`preview-play-btn${previewing ? ' is-playing' : ''}`}
@@ -896,8 +1058,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
 
 
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary">
-            {songOnly ? 'Save Song' : (player ? 'Update Player' : 'Add Player')}
+          <button type="submit" className="btn btn-primary" disabled={mp3Uploading}>
+            {mp3Uploading ? 'Uploading…' : (songOnly ? 'Save Song' : (player ? 'Update Player' : 'Add Player'))}
           </button>
           <button
             type="button"

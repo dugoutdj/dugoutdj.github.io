@@ -272,7 +272,7 @@ function sliceBuffer(buffer, startSeconds, durationSeconds) {
  *
  * @returns {Promise<{ blob: Blob, mimeType: string, trimmed: boolean }>}
  */
-async function trimToWindow(blob, startTime, duration) {
+export async function trimToWindow(blob, startTime, duration) {
   const start = Math.max(0, Number(startTime) || 0);
   const dur = Math.max(1, Number(duration) || 0);
 

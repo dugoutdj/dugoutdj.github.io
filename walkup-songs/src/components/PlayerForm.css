@@ -622,3 +622,45 @@
   background: #dcfce7;
   color: #166534;
 }
+
+/* Uploaded MP3 song source */
+.mp3-upload-group {
+  margin-top: 0.25rem;
+}
+
+.mp3-upload-group input[type="file"] {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary, #0f172a);
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.mp3-upload-group input[type="file"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mp3-loaded-name {
+  color: var(--success-color, #16a34a);
+}
+
+/* Read-only summary shown while editing an already-uploaded MP3 clip (the
+   window is fixed at upload time; re-select the file to change it). */
+.mp3-window-locked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg-tertiary, #f1f5f9);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}

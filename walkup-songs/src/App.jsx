@@ -27,6 +27,7 @@ import {
   clearLibrary
 } from './utils/offlineLibrary';
 import { downloadPreview } from './utils/previewDownloader';
+import { fetchClip, deleteClip } from './utils/mp3';
 import { songKey } from './utils/song';
 import { rememberSong, recordPlay } from './utils/songHistory';
 import { playAnnouncement, stopAnnouncement, preloadAnnouncements } from './utils/announcer';
@@ -58,9 +59,10 @@ function toSharedPlayer(p) {
     appleTrackId: String(p?.appleTrackId || ''),
     songVideoId: String(p?.songVideoId || ''),
     songThumbnail: String(p?.songThumbnail || ''),
+    mp3Key: String(p?.mp3Key || ''),
     startTime: Number(p?.startTime) || 0,
     duration: Number(p?.duration) || 10,
-    songSource: p?.songSource === 'apple' ? 'apple' : (p?.songSource === 'youtube' ? 'youtube' : ''),
+    songSource: p?.songSource === 'apple' ? 'apple' : (p?.songSource === 'youtube' ? 'youtube' : (p?.songSource === 'mp3' ? 'mp3' : '')),
     updatedAt: Number(p?.updatedAt) || Date.now(),
     lastChangedBy: p?.lastChangedBy || 'coach',
     history: Array.isArray(p?.history) ? p.history : []
@@ -189,35 +191,40 @@ function App() {
     setSaveStatus((prev) => ({ ...prev, [key]: 'Finding song…' }));
 
     try {
-      const result = await downloadPreview(
-        key,
-        player.songTitle || key,
-        player.songSource === 'apple' ? player.previewUrl : null,
-        player.startTime || 0,
-        player.duration || 0,
-        (progress) => {
-          setSaveStatus((prev) => {
-            let text = 'Downloading…';
-            if (progress.stage === 'searching') text = 'Finding song…';
-            else if (progress.stage === 'downloading' && progress.total) {
-              const pct = Math.round((progress.downloaded / progress.total) * 100);
-              text = `Downloading… ${pct}%`;
+      // Uploaded MP3 clips are already cut to the walk-up window, so they
+      // download as-is (no search, no re-trim).
+      const isMp3Clip = player.songSource === 'mp3' && !!player.mp3Key;
+      const result = isMp3Clip
+        ? await fetchClip(player.mp3Key)
+        : await downloadPreview(
+            key,
+            player.songTitle || key,
+            player.songSource === 'apple' ? player.previewUrl : null,
+            player.startTime || 0,
+            player.duration || 0,
+            (progress) => {
+              setSaveStatus((prev) => {
+                let text = 'Downloading…';
+                if (progress.stage === 'searching') text = 'Finding song…';
+                else if (progress.stage === 'downloading' && progress.total) {
+                  const pct = Math.round((progress.downloaded / progress.total) * 100);
+                  text = `Downloading… ${pct}%`;
+                }
+                return { ...prev, [key]: text };
+              });
             }
-            return { ...prev, [key]: text };
-          });
-        }
-      );
+          );
 
       const record = {
         videoId: key,
-        title: result.title || player.songTitle || key,
+        title: isMp3Clip ? (player.songTitle || key) : (result.title || player.songTitle || key),
         blob: result.blob,
         mimeType: result.mimeType,
         size: result.blob.size,
         savedAt: Date.now(),
         // True when the blob is the exact walk-up window (already trimmed);
         // legacy/full-preview blobs are untrimmed and play offset by startTime.
-        trimmed: !!result.trimmed
+        trimmed: isMp3Clip ? true : !!result.trimmed
       };
       await saveSong(record);
       setOfflineSongs((prev) => ({
@@ -275,7 +282,7 @@ function App() {
     if (!currentTeam || syncing) return;
     const roster = currentTeam.players || [];
     const pending = roster.filter(
-      (p) => p.songSource === 'apple' && !!songKey(p) &&
+      (p) => (p.songSource === 'apple' || p.songSource === 'mp3') && !!songKey(p) &&
         !offlineSongs[songKey(p)] && !downloading[songKey(p)]
     );
     const ytCount = roster.filter(
@@ -349,18 +356,24 @@ function App() {
     setShowPlayerForm(false);
     setEditingPlayer(null);
 
-    // Auto-save the song locally as soon as a playable Apple song is set, so
-    // it's ready for offline playback without tapping anything. YouTube songs
-    // are streamed from YouTube and are intentionally NOT saved locally. On
-    // edit, re-save when the song changed OR the walk-up window moved (the
-    // saved clip is trimmed to the window, so it must be cut again).
+    // Auto-save the song locally as soon as a playable Apple/MP3 song is set,
+    // so it's ready for offline playback without tapping anything. YouTube
+    // songs are streamed from YouTube and are intentionally NOT saved
+    // locally. On edit, re-save when the song changed OR the walk-up window
+    // moved (the saved clip is trimmed to the window, so it must be cut
+    // again). Replacing an MP3 clip also deletes the old one from R2.
     const newKey = songKey(playerData);
     const isAppleSong = playerData.songSource === 'apple';
+    const isMp3Song = playerData.songSource === 'mp3';
     const windowChanged =
       editingPlayer &&
       (Number(playerData.startTime) !== Number(editingPlayer.startTime) ||
         Number(playerData.duration) !== Number(editingPlayer.duration));
-    if (isAppleSong && newKey && (!oldKey || oldKey !== newKey || windowChanged)) {
+    if (editingPlayer?.songSource === 'mp3' && editingPlayer.mp3Key &&
+        newKey !== songKey(editingPlayer)) {
+      deleteClip(editingPlayer.mp3Key);
+    }
+    if ((isAppleSong || isMp3Song) && newKey && (!oldKey || oldKey !== newKey || windowChanged)) {
       // Drop the stale copy first so the re-save isn't skipped as "already saved".
       if (oldKey && oldKey === newKey && windowChanged && offlineSongs[newKey]) {
         handleRemoveOffline(newKey);
@@ -421,9 +434,14 @@ function App() {
     if (!currentTeam) return;
     storage.deletePlayer(currentTeam.id, playerId);
 
+    const deletedPlayer = players.find(p => p.id === playerId);
+    // Remove the player's uploaded clip from R2 (best effort).
+    if (deletedPlayer?.songSource === 'mp3' && deletedPlayer.mp3Key) {
+      deleteClip(deletedPlayer.mp3Key);
+    }
+
     // Reset current player if deleted
     if (currentPlayerIndex !== null) {
-      const deletedPlayer = players.find(p => p.id === playerId);
       const deletedIndex = players.indexOf(deletedPlayer);
       if (deletedIndex === currentPlayerIndex) {
         setCurrentPlayerIndex(null);
@@ -516,7 +534,7 @@ function App() {
   // When either side lacks a timestamp (legacy data), fall back to the plain
   // content diff so existing detection keeps working.
   const songSig = useCallback(
-    (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId].join('|'),
+    (p) => [p.songTitle, p.pronounced, p.startTime, p.duration, p.previewUrl, p.songVideoId, p.mp3Key].join('|'),
     []
   );
   const isPending = useCallback((local, rp) => {
@@ -529,7 +547,7 @@ function App() {
   // Poll the shared roster every 30s so the coach sees parent song updates.
   // `players` is a fresh array each render, so key the effect on a stable
   // signature string instead to avoid re-running the fetch every render.
-  const playerSig = players.map((p) => `${p.id}:${p.updatedAt}:${p.songTitle}:${p.startTime}:${p.duration}:${p.previewUrl}`).join('|');
+  const playerSig = players.map((p) => `${p.id}:${p.updatedAt}:${p.songTitle}:${p.startTime}:${p.duration}:${p.previewUrl}:${p.mp3Key || ''}`).join('|');
   useEffect(() => {
     if (!sharedTeamId) return undefined;
     let cancelled = false;
@@ -586,6 +604,11 @@ function App() {
       // string comparison to get its real id.
       const local = players.find((p) => String(p.id) === String(rp.id));
       if (!local) return;
+      // A parent's MP3 edit replaces the old clip — drop the superseded one.
+      if (local?.songSource === 'mp3' && local.mp3Key && rp.mp3Key &&
+          local.mp3Key !== rp.mp3Key) {
+        deleteClip(local.mp3Key);
+      }
       storage.updatePlayer(currentTeam.id, local.id, {
         songTitle: rp.songTitle,
         pronounced: rp.pronounced || rp.name || '',
@@ -594,6 +617,7 @@ function App() {
         appleTrackId: rp.appleTrackId,
         songVideoId: rp.songVideoId,
         songThumbnail: rp.songThumbnail,
+        mp3Key: rp.mp3Key || '',
         startTime: rp.startTime,
         duration: rp.duration,
         songSource: rp.songSource || (rp.songVideoId ? 'youtube' : 'apple'),

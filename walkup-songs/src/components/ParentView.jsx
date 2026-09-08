@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchTeam, updatePlayerSong } from '../utils/api';
 import { playerArtwork } from '../utils/song';
 import { mediaProxy } from '../utils/media';
+import { clipUrl } from '../utils/mp3';
 import { formatTime, loadYouTubeAPI } from '../utils/youtube';
 import PlayerForm from './PlayerForm';
 import LogoMark from './LogoMark';
@@ -79,12 +80,14 @@ export default function ParentView({ teamId }) {
 
   // Play the exact walk-up window of a player's saved song. Apple songs
   // stream the 30s preview via the media proxy (mobile-safe); YouTube songs
-  // play through a hidden YouTube player. Both stop at startTime + duration.
+  // play through a hidden YouTube player; uploaded MP3 clips stream the
+  // already-trimmed snippet from R2. All stop at the window's end.
   const previewPlayer = (player) => {
     if (!player) return;
     const isApple = player.songSource === 'apple';
     const isYouTube = !isApple && !!player.songVideoId;
-    if (!isApple && !isYouTube) return;
+    const isMp3 = player.songSource === 'mp3' && !!player.mp3Key;
+    if (!isApple && !isYouTube && !isMp3) return;
 
     // Tapping the same row again stops playback.
     if (previewingId !== null && String(previewingId) === String(player.id)) {
@@ -103,8 +106,6 @@ export default function ParentView({ teamId }) {
       return;
     }
 
-    const end = start + duration;
-
     // Create the audio element lazily on first use.
     if (!audioRef.current) {
       const audio = new Audio();
@@ -113,9 +114,14 @@ export default function ParentView({ teamId }) {
     }
     const audio = audioRef.current;
 
-    // Set the source inside the tap so iOS keeps the user gesture.
-    audio.src = mediaProxy(player.previewUrl);
-    audio.currentTime = start;
+    // Set the source inside the tap so iOS keeps the user gesture. Apple
+    // previews play offset by startTime; uploaded clips are already trimmed
+    // to the window, so they play from 0:00.
+    const src = isMp3 ? clipUrl(player.mp3Key) : mediaProxy(player.previewUrl);
+    const clipStart = isMp3 ? 0 : start;
+    const end = clipStart + duration;
+    audio.src = src;
+    audio.currentTime = clipStart;
     audio.volume = 1;
 
     const onTime = () => {
@@ -272,7 +278,8 @@ export default function ParentView({ teamId }) {
 
   const previewable = (player) =>
     (player.songSource === 'apple' && !!player.previewUrl) ||
-    (player.songSource !== 'apple' && !!player.songVideoId);
+    (player.songSource !== 'apple' && !!player.songVideoId) ||
+    (player.songSource === 'mp3' && !!player.mp3Key);
 
   return (
     <div className="parent-view">

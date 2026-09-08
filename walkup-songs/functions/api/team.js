@@ -39,9 +39,10 @@ function sanitizePlayer(p) {
     appleTrackId: String(p.appleTrackId ?? ''),
     songVideoId: String(p.songVideoId ?? ''),
     songThumbnail: String(p.songThumbnail ?? ''),
+    mp3Key: String(p.mp3Key ?? ''),
     startTime: Number(p.startTime) || 0,
     duration: Number(p.duration) || 10,
-    songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : ''),
+    songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : (p.songSource === 'mp3' ? 'mp3' : '')),
     updatedAt: Number(p.updatedAt) || Date.now(),
     lastChangedBy: p.lastChangedBy === 'coach' ? 'coach' : 'parent',
     // Per-player song+window history (with coach play counts) rides along so

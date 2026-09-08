@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { loadYouTubeAPI } from '../utils/youtube';
 import { songKey } from '../utils/song';
+import { clipUrl } from '../utils/mp3';
 import {
   getSong,
+  saveSong,
   getCachedUrl,
   cacheBlobUrl,
   urlCacheEntry
@@ -424,6 +426,43 @@ export const useYouTubePlayer = () => {
         .catch(() => {
           if (token !== playTokenRef.current) return;
           startAudio(song.previewUrl, false, startTime);
+        });
+      return;
+    }
+
+    // Uploaded MP3 clips: the stored snippet is already trimmed to the
+    // walk-up window, so it plays from 0:00. Prefer the saved offline copy;
+    // otherwise fetch the clip from R2, play it, and save it locally so the
+    // next play is instant (and works with no signal).
+    if (song.songSource === 'mp3' && song.mp3Key && audio) {
+      // Start buffering inside the tap (keeps the iOS user gesture).
+      audio.src = clipUrl(song.mp3Key);
+      getSong(key)
+        .then((saved) => {
+          if (token !== playTokenRef.current) return;
+          if (saved && saved.blob) {
+            startAudio(cacheBlobUrl(key, saved.blob, true), true, 0);
+            return;
+          }
+          fetch(clipUrl(song.mp3Key))
+            .then((res) => {
+              if (!res.ok) throw new Error(`clip ${res.status}`);
+              return res.blob();
+            })
+            .then((blob) => {
+              if (token !== playTokenRef.current) return;
+              saveSong({
+                videoId: key,
+                title: song.songTitle || key,
+                blob,
+                mimeType: blob.type || 'audio/wav',
+                size: blob.size,
+                savedAt: Date.now(),
+                trimmed: true
+              }).catch(() => {});
+              startAudio(cacheBlobUrl(key, blob, true), true, 0);
+            })
+            .catch(() => { /* could not reach R2 - skip */ });
         });
       return;
     }
