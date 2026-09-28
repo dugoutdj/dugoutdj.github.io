@@ -11,15 +11,19 @@ import ParentView from './components/ParentView';
 import CoachAccountDialog from './components/CoachAccountDialog';
 import Landing from './components/Landing';
 import LogoMark from './components/LogoMark';
+import DjView from './components/DjView';
 import {
   createTeam,
   fetchTeam,
+  setTeamOrder,
   shareUrlForTeam,
   teamIdFromLocation,
   getCurrentCoach,
   syncAccountTeam,
   claimAccountTeam
 } from './utils/api';
+import { orderPlayers, rosterOrderIds, sameOrder } from './utils/rosterOrder';
+import { djTokenFromLocation } from './utils/dj';
 import {
   listSongs,
   saveSong,
@@ -69,7 +73,9 @@ function toSharedPlayer(p) {
   };
 }
 
-function App() {
+// The coach console — the DJ booth. Only mounted for a signed-in coach
+// visiting the root URL.
+function CoachApp() {
   const storage = useLocalStorage();
   const player = useYouTubePlayer();
 
@@ -79,6 +85,12 @@ function App() {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
   const playbackRequestRef = useRef(0);
   const activePlayerIdRef = useRef(null);
+  // Batting order sync: the server stamp of the order this device last applied
+  // or wrote, the order still waiting to be written, and the drag debounce.
+  const appliedOrderAtRef = useRef(0);
+  const pendingOrderRef = useRef(null);
+  const orderSyncTimerRef = useRef(null);
+  const [orderSyncWarning, setOrderSyncWarning] = useState('');
   const playSyncTimerRef = useRef(null); // debounce for history re-publish after taps
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Start collapsed
   const [offlineSongs, setOfflineSongs] = useState({}); // videoId -> { size, savedAt, title }
@@ -96,9 +108,6 @@ function App() {
   const [showCoachAccount, setShowCoachAccount] = useState(false);
   // undefined = session still being checked, null = signed out (landing page).
   const [coachAccount, setCoachAccount] = useState(undefined);
-
-  // Parent mode: URL is /team/<id> — render the simple parent view instead.
-  const parentTeamId = teamIdFromLocation();
 
   useEffect(() => {
     getCurrentCoach().then((result) => {
@@ -457,6 +466,40 @@ function App() {
   const handleReorderPlayers = (reorderedPlayers) => {
     if (!currentTeam) return;
     storage.reorderPlayers(currentTeam.id, reorderedPlayers);
+
+    // Publish the new batting order. It is shared state: a guest DJ's console
+    // follows it, and so does any other device of the coach's. A drag emits one
+    // of these per row crossed, so the write is debounced.
+    const sharedId = currentTeam.sharedTeamId;
+    if (!sharedId) return;
+    const ids = rosterOrderIds(reorderedPlayers);
+    pendingOrderRef.current = ids;
+    if (orderSyncTimerRef.current) clearTimeout(orderSyncTimerRef.current);
+    orderSyncTimerRef.current = setTimeout(() => {
+      orderSyncTimerRef.current = null;
+      pushTeamOrder(sharedId, ids);
+    }, 900);
+  };
+
+  // Send the batting order and remember the server's stamp for it. An empty
+  // stamp (the order was already what we sent) simply keeps the current one.
+  const pushTeamOrder = (sharedId, ids) => {
+    setTeamOrder(sharedId, ids)
+      .then((result) => {
+        if (Number(result?.orderUpdatedAt)) {
+          appliedOrderAtRef.current = Number(result.orderUpdatedAt);
+        }
+        if (pendingOrderRef.current?.join('|') === ids.join('|')) {
+          pendingOrderRef.current = null;
+        }
+        setOrderSyncWarning('');
+      })
+      .catch((error) => {
+        // Keep the local order and retry on the next poll rather than letting
+        // the server's older order silently win.
+        console.error('Batting order sync failed:', error);
+        setOrderSyncWarning('Batting order saved here — syncing…');
+      });
   };
 
   // After a counted roster tap the play count is already saved locally; this
@@ -482,6 +525,11 @@ function App() {
   // Flush any pending roster re-publish when the app unmounts.
   useEffect(() => () => {
     if (playSyncTimerRef.current) clearTimeout(playSyncTimerRef.current);
+  }, []);
+
+  // Drop a queued batting-order write when the app goes away.
+  useEffect(() => () => {
+    if (orderSyncTimerRef.current) clearTimeout(orderSyncTimerRef.current);
   }, []);
 
   // Post the current team to the Cloudflare API and give the coach a link to
@@ -555,6 +603,30 @@ function App() {
       try {
         const remote = await fetchTeam(sharedTeamId);
         if (cancelled || !remote?.players) return;
+
+        // A batting-order change made elsewhere (a guest DJ's console) arrives
+        // like any other update. Only adopt it when it is newer than what this
+        // device last applied — the stamps all come from the server clock, so
+        // the two sides can never disagree about which is more recent.
+        const remoteOrderAt = Number(remote.orderUpdatedAt) || 0;
+        if (Array.isArray(remote.order) && remote.order.length) {
+          if (pendingOrderRef.current) {
+            // Our own change hasn't landed yet — push it instead of reverting.
+            // Cancel the queued debounce so it isn't sent twice.
+            if (orderSyncTimerRef.current) {
+              clearTimeout(orderSyncTimerRef.current);
+              orderSyncTimerRef.current = null;
+            }
+            pushTeamOrder(sharedTeamId, pendingOrderRef.current);
+          } else if (remoteOrderAt > appliedOrderAtRef.current) {
+            appliedOrderAtRef.current = remoteOrderAt;
+            const ordered = orderPlayers(players, remote.order);
+            if (!sameOrder(players, ordered)) {
+              storage.reorderPlayers(currentTeam.id, ordered);
+            }
+          }
+        }
+
         const updates = {};
         remote.players.forEach((rp) => {
           const local = players.find((p) => String(p.id) === String(rp.id));
@@ -768,12 +840,6 @@ function App() {
     player.stopSong();
   };
 
-  // If the URL is a shared parent link (/team/<id>), show the parent view
-  // exclusively — no roster editing, no playback, no offline library.
-  if (parentTeamId) {
-    return <ParentView teamId={parentTeamId} />;
-  }
-
   // The coach app requires an account. While the session is being checked we
   // show a brief splash; signed-out visitors land on the public landing page.
   if (coachAccount === undefined) {
@@ -896,6 +962,7 @@ function App() {
                 </div>
                 <div className="team-header-actions">
                   {publishingCoachChange && <span className="syncing-coach-status">Saving coach change…</span>}
+                  {orderSyncWarning && <span className="syncing-coach-status">{orderSyncWarning}</span>}
                   <button
                     className="btn btn-secondary btn-sm"
                     onClick={handleShareWithParents}
@@ -1057,6 +1124,7 @@ function App() {
           onShare={handleShareWithParents}
           shareLink={shareLink}
           shareStatus={shareStatus}
+          sharedTeamId={sharedTeamId}
         />
       )}
 
@@ -1092,6 +1160,28 @@ function App() {
       </footer>
     </div>
   );
+}
+
+// Top-level router. The URL decides which of the three surfaces to mount:
+//
+//   /dj/<token>   → guest DJ console (the invite the coach emailed)
+//   /team/<id>    → parent song-update view
+//   anything else → the coach console
+//
+// Routing happens here rather than inside the coach app so only the mounted
+// view ever creates a YouTube player or an offline audio element.
+function App() {
+  const djToken = djTokenFromLocation();
+  if (djToken) {
+    return <DjView token={djToken} />;
+  }
+
+  const parentTeamId = teamIdFromLocation();
+  if (parentTeamId) {
+    return <ParentView teamId={parentTeamId} />;
+  }
+
+  return <CoachApp />;
 }
 
 export default App;

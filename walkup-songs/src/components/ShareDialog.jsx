@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { exportData, importData } from '../utils/storage';
+import GuestDjInvite from './GuestDjInvite';
 import './ShareDialog.css';
 
-export default function ShareDialog({ data, onImport, onClose, onShare, shareLink, shareStatus }) {
+export default function ShareDialog({ data, onImport, onClose, onShare, shareLink, shareStatus, sharedTeamId }) {
   const fileInputRef = useRef(null);
 
   const handleExport = () => {
@@ -79,6 +80,8 @@ export default function ShareDialog({ data, onImport, onClose, onShare, shareLin
               </div>
             )}
           </div>
+
+          <GuestDjInvite sharedTeamId={sharedTeamId} />
 
           <div className="share-section">
             <h4>📤 Export / Backup</h4>

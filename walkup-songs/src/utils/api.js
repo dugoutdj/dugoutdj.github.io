@@ -28,9 +28,19 @@ export async function createTeam(teamData) {
   });
 }
 
-// Fetch the current shared roster for a team id.
+// Fetch the current shared roster for a team id. The payload also carries the
+// shared batting order (`order` + the server-stamped `orderUpdatedAt`).
 export async function fetchTeam(teamId) {
   return request(`/team/${encodeURIComponent(teamId)}`);
+}
+
+// Publish the batting order so the coach's roster and every guest DJ console
+// agree on who bats next. Returns { ok, order, orderUpdatedAt, unchanged? }.
+export async function setTeamOrder(teamId, order) {
+  return request(`/team/${encodeURIComponent(teamId)}/order`, {
+    method: 'PUT',
+    body: JSON.stringify({ order })
+  });
 }
 
 // Update one player's song in the shared roster.

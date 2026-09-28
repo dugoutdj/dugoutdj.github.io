@@ -2,6 +2,11 @@
 // Body: { name, players: [{ id, name, number, songTitle, previewUrl,
 //         artworkUrl, appleTrackId, startTime, duration, songSource, history }] }
 // Returns: { teamId }
+//
+// The batting order (team.order / team.orderUpdatedAt) is NOT touched here.
+// It is seeded from this publish the first time a roster is shared, and from
+// then on it only changes through PUT /api/team/:id/order — otherwise every
+// song edit a coach published would overwrite an order a guest DJ just set.
 
 const ALLOWED_ORIGIN = '*';
 
@@ -79,6 +84,23 @@ export async function onRequestPost(context) {
     const teamId = /^[a-z0-9]{8}$/.test(String(body.teamId || ''))
       ? String(body.teamId)
       : generateTeamId();
+
+    // Preserve the shared batting order across publishes; seed it from this
+    // roster's order when the team has never had one.
+    try {
+      const existing = await env.TEAMS.get(`team:${teamId}`);
+      const stored = existing ? JSON.parse(existing) : null;
+      if (Array.isArray(stored?.order) && stored.order.length) {
+        team.order = stored.order.map(String);
+        team.orderUpdatedAt = Number(stored.orderUpdatedAt) || 0;
+      }
+    } catch (err) {
+      console.error('POST /api/team order carry-over error:', err);
+    }
+    if (!team.order?.length) {
+      team.order = players.map((p) => String(p.id));
+      team.orderUpdatedAt = Date.now();
+    }
 
     await env.TEAMS.put(`team:${teamId}`, JSON.stringify(team), { expirationTtl: 90 * 24 * 3600 });
     return json({ teamId });
