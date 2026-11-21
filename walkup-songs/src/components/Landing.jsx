@@ -176,8 +176,8 @@ export default function Landing({ onSignedIn }) {
                 <span className="landing-step-num">1</span>
                 <h3>Build the roster</h3>
                 <p>
-                  Add players with jersey numbers and pick each one’s walk-up song — search Apple
-                  Music or paste any YouTube link for the full song.
+                  Add players with jersey numbers and pick each one’s walk-up song — paste any
+                  YouTube link for the full song or upload your own MP3 clip.
                 </p>
               </div>
               <div className="landing-step">
@@ -207,8 +207,8 @@ export default function Landing({ onSignedIn }) {
             <div className="landing-features">
               <div className="landing-feature">
                 <span className="landing-feature-icon">🎵</span>
-                <h3>Apple previews or full YouTube songs</h3>
-                <p>Pick from the catalog Apple makes available, or use any song on YouTube in full.</p>
+                <h3>Full YouTube songs or MP3 uploads</h3>
+                <p>Paste any YouTube link for the full song, or upload your own MP3 clip.</p>
               </div>
               <div className="landing-feature">
                 <span className="landing-feature-icon">🎙️</span>

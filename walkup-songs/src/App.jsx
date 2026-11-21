@@ -41,7 +41,7 @@ import './App.css';
 function friendlySaveError(message) {
   const text = String(message || '');
   if (/Failed to fetch|NetworkError|load failed|ERR_|TypeError/i.test(text)) {
-    return "Couldn't reach Apple's servers. Check your internet connection and try again.";
+    return "Couldn't download the song clip. Check your internet connection and try again.";
   }
   const trimmed = text.length > 260 ? `${text.slice(0, 257)}…` : text;
   return trimmed || 'download failed';
@@ -290,7 +290,7 @@ function CoachApp() {
     if (!currentTeam || syncing) return;
     const roster = currentTeam.players || [];
     const pending = roster.filter(
-      (p) => (p.songSource === 'apple' || p.songSource === 'mp3') && !!songKey(p) &&
+      (p) => p.songSource === 'mp3' && !!songKey(p) &&
         !offlineSongs[songKey(p)] && !downloading[songKey(p)]
     );
     const ytCount = roster.filter(
@@ -371,7 +371,6 @@ function CoachApp() {
     // moved (the saved clip is trimmed to the window, so it must be cut
     // again). Replacing an MP3 clip also deletes the old one from R2.
     const newKey = songKey(playerData);
-    const isAppleSong = playerData.songSource === 'apple';
     const isMp3Song = playerData.songSource === 'mp3';
     const windowChanged =
       editingPlayer &&
@@ -381,7 +380,7 @@ function CoachApp() {
         newKey !== songKey(editingPlayer)) {
       deleteClip(editingPlayer.mp3Key);
     }
-    if ((isAppleSong || isMp3Song) && newKey && (!oldKey || oldKey !== newKey || windowChanged)) {
+    if (isMp3Song && newKey && (!oldKey || oldKey !== newKey || windowChanged)) {
       // Drop the stale copy first so the re-save isn't skipped as "already saved".
       if (oldKey && oldKey === newKey && windowChanged && offlineSongs[newKey]) {
         handleRemoveOffline(newKey);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatTime, extractVideoId, fetchVideoInfo, getVideoDuration, loadYouTubeAPI } from '../utils/youtube';
-import { searchTracks, trimToWindow } from '../utils/previewDownloader';
+import { trimToWindow } from '../utils/previewDownloader';
 import { clipUrl, readAudioDuration, uploadClip, deleteClip } from '../utils/mp3';
 import { mediaProxy } from '../utils/media';
 import { sortHistory, songComboKey } from '../utils/songHistory';
@@ -68,11 +68,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     startTime: 0,
     duration: 10
   });
-  const [appleQuery, setAppleQuery] = useState('');
-  const [appleResults, setAppleResults] = useState([]);
-  const [appleSearching, setAppleSearching] = useState(false);
-  const [appleError, setAppleError] = useState(null);
-  // YouTube URL paste (the full-song alternative to the 30s Apple preview).
+  // YouTube URL paste (the full-song alternative).
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubeLoading, setYoutubeLoading] = useState(false);
   const [youtubeError, setYoutubeError] = useState(null);
@@ -182,40 +178,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     };
   }, [mp3ObjectUrl]);
 
-  // Debounced live search against the catalog. The 700ms debounce keeps
-  // fast typing to a single request (per-keystroke bursts tripped Apple's
-  // rate limiter on the server), and 2+ chars avoids useless one-letter
-  // searches. Results from a superseded query are dropped.
-  const latestQueryRef = useRef('');
-  useEffect(() => {
-    const q = appleQuery.trim();
-    if (q.length < 2) {
-      latestQueryRef.current = '';
-      setAppleResults([]);
-      setAppleError(null);
-      return;
-    }
-    latestQueryRef.current = q;
-
-    const timer = setTimeout(async () => {
-      setAppleSearching(true);
-      setAppleError(null);
-      try {
-        const results = await searchTracks(q);
-        if (latestQueryRef.current !== q) return; // a newer query won
-        setAppleResults(results);
-      } catch (err) {
-        if (latestQueryRef.current !== q) return;
-        console.error('Song search error:', err);
-        setAppleError(err.message || 'Search failed. Please try again.');
-      } finally {
-        if (latestQueryRef.current === q) setAppleSearching(false);
-      }
-    }, 700);
-
-    return () => clearTimeout(timer);
-  }, [appleQuery]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -258,26 +220,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
     }
 
     onSave(data);
-  };
-
-  const selectAppleTrack = (track) => {
-    setFormData((prev) => ({
-      ...prev,
-      songSource: 'apple',
-      songUrl: track.trackViewUrl || '',
-      songVideoId: '',
-      songThumbnail: '',
-      appleTrackId: track.trackId,
-      previewUrl: track.previewUrl,
-      artworkUrl: track.artworkUrl,
-      songTitle: `${track.artistName} - ${track.trackName}`,
-      mp3Key: '',
-      startTime: 0,
-      duration: WINDOW_SECONDS
-    }));
-    setAppleQuery('');
-    setAppleResults([]);
-    clearMp3Selection();
   };
 
   // Load a pasted YouTube link: extract the video id, fetch its title and
@@ -362,8 +304,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
       setMp3File({ blob: file, name: file.name });
       setMp3Duration(duration);
       setMp3ObjectUrl(URL.createObjectURL(file));
-      setAppleResults([]);
-      setAppleError(null);
       setYoutubeError(null);
       setFormData((prev) => ({
         ...prev,
@@ -650,7 +590,9 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   // Every distinct (song, start, duration) the player has used, most-played
   // first. Shown inside the song picker so the coach or a parent can restore
   // an exact past selection with one tap.
-  const historyRows = sortHistory(player?.history).filter((h) => h && h.songTitle);
+  const historyRows = sortHistory(player?.history).filter(
+    (h) => h && h.songTitle && h.songSource !== 'apple'
+  );
 
   const isActiveHistoryEntry = (entry) => (
     String(entry?.appleTrackId || '') === String(formData.appleTrackId || '') &&
@@ -767,45 +709,6 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
         <div className="form-group">
           <label>Song</label>
           <div className="song-source-box">
-          <div className="apple-search-box">
-            <input
-              type="text"
-              value={appleQuery}
-              onChange={(e) => setAppleQuery(e.target.value)}
-              className="input"
-              placeholder="Search Apple Music for a song..."
-            />
-            {appleSearching && (
-              <span className="apple-searching">🔍 Searching…</span>
-            )}
-          </div>
-          {appleError && <small className="search-error-text">{appleError}</small>}
-
-          {appleResults.length > 0 && (
-            <div className="apple-results">
-              {appleResults.map((result) => (
-                <div
-                  key={result.trackId}
-                  className="apple-result-item"
-                  onClick={() => selectAppleTrack(result)}
-                >
-                  {result.artworkUrl && (
-                    <img src={result.artworkUrl} alt={result.trackName} />
-                  )}
-                  <div className="result-info">
-                    <div className="result-title">{result.trackName}</div>
-                    <div className="result-channel">
-                      {result.artistName}
-                      {result.collectionName ? ` · ${result.collectionName}` : ''}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="form-divider"><span>OR</span></div>
-
           <div className="form-group youtube-url-group">
             <label>Paste a YouTube link</label>
             <div className="youtube-url-row">
@@ -1053,7 +956,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
             className="input"
             placeholder="e.g., Thunder - Imagine Dragons"
           />
-          <small className="form-hint">Auto-fills from Apple Music search or YouTube</small>
+          <small className="form-hint">Auto-fills from YouTube or your uploaded MP3</small>
         </div>
 
 

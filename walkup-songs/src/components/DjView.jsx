@@ -4,7 +4,6 @@ import { getDjSession, verifyDjToken } from '../utils/dj';
 import { playerArtwork, playerHasSong, songKey } from '../utils/song';
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer';
 import { playAnnouncement, stopAnnouncement, preloadAnnouncements } from '../utils/announcer';
-import { downloadPreview } from '../utils/previewDownloader';
 import { fetchClip } from '../utils/mp3';
 import { getSong, saveSong } from '../utils/offlineLibrary';
 import { orderPlayers, rosterOrderIds } from '../utils/rosterOrder';
@@ -313,7 +312,7 @@ export default function DjView({ token }) {
   const saveSongsToPhone = async () => {
     if (preparing) return;
     const playable = players.filter(
-      (p) => (p.songSource === 'apple' || p.songSource === 'mp3') && songKey(p)
+      (p) => p.songSource === 'mp3' && songKey(p)
     );
     if (!playable.length) {
       setStatus('This roster has no downloadable songs yet.');
@@ -333,16 +332,7 @@ export default function DjView({ token }) {
           already += 1;
           continue;
         }
-        const isMp3Clip = p.songSource === 'mp3';
-        const result = isMp3Clip
-          ? await fetchClip(p.mp3Key)
-          : await downloadPreview(
-              key,
-              p.songTitle || key,
-              p.previewUrl || null,
-              p.startTime || 0,
-              p.duration || 0
-            );
+        const result = await fetchClip(p.mp3Key);
         await saveSong({
           videoId: key,
           title: p.songTitle || key,
@@ -350,7 +340,7 @@ export default function DjView({ token }) {
           mimeType: result.mimeType,
           size: result.blob.size,
           savedAt: Date.now(),
-          trimmed: isMp3Clip ? true : !!result.trimmed
+          trimmed: true
         });
         saved += 1;
       } catch (err) {
