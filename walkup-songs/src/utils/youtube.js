@@ -64,23 +64,37 @@ export const fetchVideoTitle = async (videoId) => {
   return info?.title || null;
 };
 
-// Load YouTube IFrame API
-export const loadYouTubeAPI = () => {
-  return new Promise((resolve) => {
-    if (window.YT && window.YT.Player) {
-      resolve(window.YT);
-      return;
-    }
+// Load YouTube IFrame API (cached so concurrent callers share one script load)
+let apiPromise = null;
 
+export const loadYouTubeAPI = () => {
+  if (window.YT && window.YT.Player) {
+    return Promise.resolve(window.YT);
+  }
+  if (apiPromise) {
+    return apiPromise;
+  }
+
+  apiPromise = new Promise((resolve) => {
+    const prevReady = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
+      if (typeof prevReady === 'function') prevReady();
       resolve(window.YT);
     };
 
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      if (firstScriptTag && firstScriptTag.parentNode) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      } else {
+        document.head.appendChild(tag);
+      }
+    }
   });
+
+  return apiPromise;
 };
 
 // Search YouTube videos (using YouTube Data API v3)

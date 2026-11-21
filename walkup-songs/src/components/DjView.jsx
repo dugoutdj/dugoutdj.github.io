@@ -10,7 +10,6 @@ import { getSong, saveSong } from '../utils/offlineLibrary';
 import { orderPlayers, rosterOrderIds } from '../utils/rosterOrder';
 import { formatTime } from '../utils/youtube';
 import PlaybackControls from './PlaybackControls';
-import YouTubePlayer from './YouTubePlayer';
 import LogoMark from './LogoMark';
 import './DjView.css';
 
@@ -568,8 +567,6 @@ export default function DjView({ token }) {
         </button>
         {status && <span className="dj-status">{status}</span>}
       </footer>
-
-      <YouTubePlayer />
     </div>
   );
 }

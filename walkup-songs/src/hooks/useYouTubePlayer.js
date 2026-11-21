@@ -44,8 +44,24 @@ export const useYouTubePlayer = () => {
     audio.addEventListener('pause', () => setIsPlaying(false));
     audio.addEventListener('ended', () => setIsPlaying(false));
 
+    // Off-screen 1x1 host for the YouTube iframe. Creating it imperatively
+    // (like the <audio> element above) guarantees it exists in the DOM before
+    // new YT.Player() runs, even while CoachApp or DjView is still showing a
+    // loading splash. Keep it 1x1 because iOS Safari refuses to play 0x0 video.
+    const ytContainer = document.createElement('div');
+    ytContainer.style.cssText =
+      'position:fixed;bottom:-100px;left:-100px;width:1px;height:1px;overflow:hidden;z-index:-1;pointer-events:none;';
+    const ytHost = document.createElement('div');
+    ytHost.style.cssText = 'width:1px;height:1px;';
+    ytContainer.appendChild(ytHost);
+    document.body.appendChild(ytContainer);
+
+    let cancelled = false;
+    let ytPlayer = null;
+
     loadYouTubeAPI().then((YT) => {
-      new YT.Player('youtube-player', {
+      if (cancelled) return;
+      ytPlayer = new YT.Player(ytHost, {
         height: '1',
         width: '1',
         playerVars: {
@@ -56,6 +72,10 @@ export const useYouTubePlayer = () => {
         },
         events: {
           onReady: (event) => {
+            if (cancelled) {
+              try { event.target?.destroy?.(); } catch { /* ignore */ }
+              return;
+            }
             playerRef.current = event.target;
             setPlayer(event.target);
             setIsReady(true);
@@ -72,6 +92,7 @@ export const useYouTubePlayer = () => {
             }
           },
           onStateChange: (event) => {
+            if (cancelled) return;
             if (event.data === YT.PlayerState.PLAYING) {
               setIsPlaying(true);
             } else if (event.data === YT.PlayerState.PAUSED ||
@@ -84,9 +105,16 @@ export const useYouTubePlayer = () => {
     });
 
     return () => {
+      cancelled = true;
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
       if (ytRetryRef.current) clearInterval(ytRetryRef.current);
+      if (ytPlayer && typeof ytPlayer.destroy === 'function') {
+        try { ytPlayer.destroy(); } catch { /* ignore */ }
+      }
+      ytPlayer = null;
+      playerRef.current = null;
+      ytContainer.remove();
       audio.pause();
       audio.remove();
       audioRef.current = null;

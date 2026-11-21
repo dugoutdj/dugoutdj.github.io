@@ -5,7 +5,6 @@ import TeamSelector from './components/TeamSelector';
 import PlayerList from './components/PlayerList';
 import PlayerForm from './components/PlayerForm';
 import PlaybackControls from './components/PlaybackControls';
-import YouTubePlayer from './components/YouTubePlayer';
 import ShareDialog from './components/ShareDialog';
 import ParentView from './components/ParentView';
 import CoachAccountDialog from './components/CoachAccountDialog';
@@ -1093,8 +1092,6 @@ function CoachApp() {
           )}
         </main>
       </div>
-
-      <YouTubePlayer />
 
       {showCoachAccount && (
         <CoachAccountDialog
