@@ -15,6 +15,8 @@
 //
 // Body: { order: ["<playerId>", ...] }  → { ok, order, orderUpdatedAt }
 
+import { getAuthenticatedCoach, hasActiveDjSession, getTeamOwnerCoachId } from '../../../_lib/security.js';
+
 const ALLOWED_ORIGIN = '*';
 const TEAM_TTL_SECONDS = 90 * 24 * 3600;
 // A roster is never this big; the cap just bounds what a client can write.
@@ -27,7 +29,7 @@ function json(body, status = 200) {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
       'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     }
   });
 }
@@ -36,7 +38,7 @@ export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: {
     'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400'
   }});
 }
@@ -55,6 +57,16 @@ export async function onRequestPut(context) {
   if (!/^[a-z0-9]{8}$/.test(teamId)) return json({ error: 'Invalid team id' }, 400);
 
   try {
+    const ownerCoachId = await getTeamOwnerCoachId(env, teamId);
+    if (ownerCoachId) {
+      const coach = await getAuthenticatedCoach(request, env);
+      const isCoach = Boolean(coach && coach.id === ownerCoachId);
+      const isDj = !isCoach && await hasActiveDjSession(request, env, teamId);
+      if (!isCoach && !isDj) {
+        return json({ error: 'Only the coach or an invited guest DJ can change the batting order.' }, 403);
+      }
+    }
+
     const raw = await env.TEAMS.get(`team:${teamId}`);
     if (!raw) return json({ error: 'Team not found' }, 404);
     const team = JSON.parse(raw);

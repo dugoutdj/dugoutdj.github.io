@@ -18,6 +18,8 @@
 // key. In every case we return a non-200 so the client skips the
 // announcement and plays the song directly — the walk-up never breaks.
 
+import { getClientIP, checkRateLimit } from '../_lib/security.js';
+
 const VOICE_ID = 'mYTliPiFsycwxhxWzfA0';
 const MODEL_ID = 'eleven_flash_v2_5';
 const OUTPUT_FORMAT = 'mp3_22050_32';
@@ -93,6 +95,16 @@ export async function onRequestGet(context) {
   const apiKey = env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     return json({ error: 'Announcer not configured' }, 503);
+  }
+
+  // Throttle uncached TTS generation per IP so bots can't burn ElevenLabs credits.
+  const missLimit = await checkRateLimit(env, 'announce-miss', getClientIP(request), 30, 3600);
+  if (!missLimit.allowed) {
+    return json(
+      { error: 'Too many new announcements. Try again later.' },
+      429,
+      { 'Retry-After': String(missLimit.retryAfter) }
+    );
   }
 
   // 3) Generate with ElevenLabs.

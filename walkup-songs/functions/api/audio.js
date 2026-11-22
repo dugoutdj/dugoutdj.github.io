@@ -8,6 +8,8 @@
 // walk-up window ever leaves the device. Requires an R2 bucket bound as
 // `CLIPS` in the Pages project (Workers & Bindings -> R2 -> CLIPS).
 
+import { getClientIP, checkRateLimit } from '../_lib/security.js';
+
 const ALLOWED_ORIGIN = '*';
 const MAX_CLIP_BYTES = 6 * 1024 * 1024; // generous: a 15s stereo WAV is ~2.6MB
 
@@ -49,6 +51,14 @@ export async function onRequestPost(context) {
     if (!env.CLIPS) {
       return json({ error: 'Audio storage is not configured yet (R2 bucket "CLIPS").' }, 503);
     }
+    const upLimit = await checkRateLimit(env, 'audio-up', getClientIP(request), 25, 3600);
+    if (!upLimit.allowed) {
+      return json(
+        { error: 'Too many audio uploads. Please try again later.' },
+        429,
+        { 'Retry-After': String(upLimit.retryAfter) }
+      );
+    }
     const form = await request.formData();
     const file = form.get('file');
     if (!file || typeof file === 'string' || !file.size) {
@@ -76,6 +86,14 @@ export async function onRequestDelete(context) {
   const { request, env } = context;
   try {
     if (!env.CLIPS) return json({ error: 'Audio storage is not configured yet.' }, 503);
+    const delLimit = await checkRateLimit(env, 'audio-del', getClientIP(request), 30, 3600);
+    if (!delLimit.allowed) {
+      return json(
+        { error: 'Too many delete requests. Please try again later.' },
+        429,
+        { 'Retry-After': String(delLimit.retryAfter) }
+      );
+    }
     const url = new URL(request.url);
     const key = String(url.searchParams.get('key') || '');
     if (!/^clip_[a-z0-9]+\.wav$/.test(key)) {

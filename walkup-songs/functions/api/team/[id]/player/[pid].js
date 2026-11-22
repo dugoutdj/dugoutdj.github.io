@@ -3,16 +3,19 @@
 // appleTrackId, startTime, duration, songSource. Player name/number are
 // never changed by this endpoint (parents edit songs only).
 
+import { getClientIP, checkRateLimit } from '../../../../_lib/security.js';
+
 const ALLOWED_ORIGIN = '*';
 
-function json(body, status = 200) {
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type',
+      ...extraHeaders
     }
   });
 }
@@ -26,7 +29,17 @@ export async function onRequestOptions() {
   }});
 }
 
-const SONG_FIELDS = ['songTitle', 'pronounced', 'previewUrl', 'artworkUrl', 'appleTrackId', 'songVideoId', 'songThumbnail', 'mp3Key', 'startTime', 'duration', 'songSource'];
+const SONG_FIELD_LIMITS = {
+  songTitle: 160,
+  pronounced: 80,
+  previewUrl: 500,
+  artworkUrl: 500,
+  appleTrackId: 64,
+  songVideoId: 32,
+  songThumbnail: 500,
+  mp3Key: 64,
+  songSource: 32
+};
 
 export async function onRequestPut(context) {
   const { request, env, params } = context;
@@ -36,6 +49,15 @@ export async function onRequestPut(context) {
   if (!playerId) return json({ error: 'Invalid player id' }, 400);
 
   try {
+    const editLimit = await checkRateLimit(env, 'player-edit', getClientIP(request), 60, 3600);
+    if (!editLimit.allowed) {
+      return json(
+        { error: 'Too many song updates. Please try again later.' },
+        429,
+        { 'Retry-After': String(editLimit.retryAfter) }
+      );
+    }
+
     const raw = await env.TEAMS.get(`team:${teamId}`);
     if (!raw) return json({ error: 'Team not found' }, 404);
 
@@ -50,13 +72,13 @@ export async function onRequestPut(context) {
       return json({ error: 'Invalid JSON body' }, 400);
     }
 
-    for (const field of SONG_FIELDS) {
+    for (const [field, limit] of Object.entries(SONG_FIELD_LIMITS)) {
       if (field in body) {
-        if (field === 'startTime') player.startTime = Number(body[field]) || 0;
-        else if (field === 'duration') player.duration = Number(body[field]) || 10;
-        else player[field] = String(body[field] ?? '');
+        player[field] = String(body[field] ?? '').slice(0, limit);
       }
     }
+    if ('startTime' in body) player.startTime = Number(body.startTime) || 0;
+    if ('duration' in body) player.duration = Number(body.duration) || 10;
 
     // Stamp the wall-clock time of this parent update so the coach can tell
     // a fresh parent submission from one they have already superseded.

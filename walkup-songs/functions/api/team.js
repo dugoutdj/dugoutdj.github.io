@@ -8,16 +8,20 @@
 // then on it only changes through PUT /api/team/:id/order — otherwise every
 // song edit a coach published would overwrite an order a guest DJ just set.
 
-const ALLOWED_ORIGIN = '*';
+import { getAuthenticatedCoach, getTeamOwnerCoachId, getClientIP, checkRateLimit } from '../_lib/security.js';
 
-function json(body, status = 200) {
+const ALLOWED_ORIGIN = '*';
+const MAX_PLAYERS = 100;
+
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      ...extraHeaders
     }
   });
 }
@@ -26,25 +30,26 @@ export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: {
     'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400'
   }});
 }
 
 function sanitizePlayer(p) {
   if (!p || typeof p !== 'object') return null;
+  const name = String(p.name ?? '').slice(0, 80);
   return {
-    id: String(p.id ?? ''),
-    name: String(p.name ?? ''),
-    pronounced: String(p.pronounced ?? p.name ?? ''),
-    number: String(p.number ?? ''),
-    songTitle: String(p.songTitle ?? ''),
-    previewUrl: String(p.previewUrl ?? ''),
-    artworkUrl: String(p.artworkUrl ?? ''),
-    appleTrackId: String(p.appleTrackId ?? ''),
-    songVideoId: String(p.songVideoId ?? ''),
-    songThumbnail: String(p.songThumbnail ?? ''),
-    mp3Key: String(p.mp3Key ?? ''),
+    id: String(p.id ?? '').slice(0, 64),
+    name,
+    pronounced: String(p.pronounced ?? name).slice(0, 80),
+    number: String(p.number ?? '').slice(0, 12),
+    songTitle: String(p.songTitle ?? '').slice(0, 160),
+    previewUrl: String(p.previewUrl ?? '').slice(0, 500),
+    artworkUrl: String(p.artworkUrl ?? '').slice(0, 500),
+    appleTrackId: String(p.appleTrackId ?? '').slice(0, 64),
+    songVideoId: String(p.songVideoId ?? '').slice(0, 32),
+    songThumbnail: String(p.songThumbnail ?? '').slice(0, 500),
+    mp3Key: String(p.mp3Key ?? '').slice(0, 64),
     startTime: Number(p.startTime) || 0,
     duration: Number(p.duration) || 10,
     songSource: p.songSource === 'apple' ? 'apple' : (p.songSource === 'youtube' ? 'youtube' : (p.songSource === 'mp3' ? 'mp3' : '')),
@@ -52,7 +57,7 @@ function sanitizePlayer(p) {
     lastChangedBy: p.lastChangedBy === 'coach' ? 'coach' : 'parent',
     // Per-player song+window history (with coach play counts) rides along so
     // parents can re-pick a past selection and counts survive round trips.
-    history: Array.isArray(p.history) ? p.history : []
+    history: Array.isArray(p.history) ? p.history.slice(0, 20) : []
   };
 }
 
@@ -69,21 +74,42 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   try {
     const body = await request.json();
-    if (!body || typeof body !== 'object' || !body.name || !Array.isArray(body.players)) {
+    const teamName = String(body?.name || '').trim().slice(0, 80);
+    if (!body || typeof body !== 'object' || !teamName || !Array.isArray(body.players)) {
       return json({ error: 'Invalid team data: expected { name, players[] }' }, 400);
     }
 
-    const players = body.players.map(sanitizePlayer).filter(Boolean);
+    const requestedId = String(body.teamId || '');
+    const isExistingId = /^[a-z0-9]{8}$/.test(requestedId);
+
+    if (isExistingId) {
+      const ownerCoachId = await getTeamOwnerCoachId(env, requestedId);
+      if (ownerCoachId) {
+        const coach = await getAuthenticatedCoach(request, env);
+        if (!coach || coach.id !== ownerCoachId) {
+          return json({ error: 'Only the team coach can update this shared roster.' }, 403);
+        }
+      }
+    } else {
+      const createLimit = await checkRateLimit(env, 'team-create', getClientIP(request), 20, 3600);
+      if (!createLimit.allowed) {
+        return json(
+          { error: 'Too many teams created. Please try again later.' },
+          429,
+          { 'Retry-After': String(createLimit.retryAfter) }
+        );
+      }
+    }
+
+    const players = body.players.slice(0, MAX_PLAYERS).map(sanitizePlayer).filter(Boolean);
     const team = {
-      name: String(body.name),
+      name: teamName,
       players,
       updatedAt: Date.now()
     };
 
     // Support updating an existing team by passing teamId.
-    const teamId = /^[a-z0-9]{8}$/.test(String(body.teamId || ''))
-      ? String(body.teamId)
-      : generateTeamId();
+    const teamId = isExistingId ? requestedId : generateTeamId();
 
     // Preserve the shared batting order across publishes; seed it from this
     // roster's order when the team has never had one.

@@ -1,20 +1,15 @@
+import { sha256, getClientIP, checkRateLimit } from '../../_lib/security.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST,OPTIONS'
 };
 
-const json = (body, status = 200) => new Response(JSON.stringify(body), {
+const json = (body, status = 200, extraHeaders = {}) => new Response(JSON.stringify(body), {
   status,
-  headers: { 'Content-Type': 'application/json', ...CORS }
+  headers: { 'Content-Type': 'application/json', ...CORS, ...extraHeaders }
 });
-
-const encoder = new TextEncoder();
-
-async function sha256(value) {
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(value));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
 
 function randomToken() {
   const bytes = new Uint8Array(32);
@@ -31,6 +26,15 @@ export async function onRequestOptions() {
 
 export async function onRequestPost({ request, env }) {
   try {
+    const ipLimit = await checkRateLimit(env, 'auth-link-ip', getClientIP(request), 10, 900);
+    if (!ipLimit.allowed) {
+      return json(
+        { error: 'Too many sign-in requests. Please wait a few minutes and try again.' },
+        429,
+        { 'Retry-After': String(ipLimit.retryAfter) }
+      );
+    }
+
     const body = await request.json();
     const email = String(body?.email || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -46,6 +50,14 @@ export async function onRequestPost({ request, env }) {
 
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS login_tokens (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER)').run();
     await env.DB.prepare('DELETE FROM login_tokens WHERE expires_at < ? OR used_at IS NOT NULL').bind(now).run();
+
+    const pending = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM login_tokens WHERE email = ? AND expires_at > ?'
+    ).bind(email, now).first();
+    if (Number(pending?.n || 0) >= 3) {
+      return json({ error: 'Too many sign-in links requested. Please check your email or wait a few minutes.' }, 429);
+    }
+
     await env.DB.prepare('INSERT INTO login_tokens (token_hash, email, expires_at) VALUES (?, ?, ?)').bind(tokenHash, email, expiresAt).run();
 
     const loginUrl = new URL(request.url);
