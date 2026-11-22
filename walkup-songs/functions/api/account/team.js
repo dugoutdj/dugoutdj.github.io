@@ -1,9 +1,10 @@
-const CORS={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type','Access-Control-Allow-Methods':'GET,POST,PUT,OPTIONS'};
+const CORS={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Methods':'GET,POST,PUT,OPTIONS'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json',...CORS}});
 const encoder=new TextEncoder();
 async function sha256(value){const d=await crypto.subtle.digest('SHA-256',encoder.encode(value));return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 function cookie(request,name){return request.headers.get('Cookie')?.split(';').map(v=>v.trim()).find(v=>v.startsWith(`${name}=`))?.slice(name.length+1)||'';}
-async function coach(request,env){const raw=cookie(request,'ddj_session');if(!raw||!env.DB)return null;const hash=await sha256(raw);const row=await env.DB.prepare('SELECT c.id,c.email FROM sessions s JOIN coaches c ON c.id=s.coach_id WHERE s.token_hash=? AND s.expires_at>?').bind(hash,Date.now()).first();return row||null;}
+function sessionToken(request){const auth=request.headers.get('Authorization')||'';if(auth.toLowerCase().startsWith('bearer '))return auth.slice(7).trim();return cookie(request,'ddj_session');}
+async function coach(request,env){const raw=sessionToken(request);if(!raw||!env.DB)return null;const hash=await sha256(raw);const row=await env.DB.prepare('SELECT c.id,c.email FROM sessions s JOIN coaches c ON c.id=s.coach_id WHERE s.token_hash=? AND s.expires_at>?').bind(hash,Date.now()).first();return row||null;}
 async function ensure(env){await env.DB.prepare('CREATE TABLE IF NOT EXISTS teams (id TEXT PRIMARY KEY,coach_id TEXT NOT NULL,shared_team_id TEXT NOT NULL UNIQUE,name TEXT NOT NULL,roster_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)').run();}
 export async function onRequestOptions(){return new Response(null,{status:204,headers:CORS});}
 export async function onRequestGet({request,env}){const c=await coach(request,env);if(!c)return json({error:'Sign in required.'},401);await ensure(env);const rows=await env.DB.prepare('SELECT shared_team_id,name,roster_json,revision,updated_at FROM teams WHERE coach_id=? ORDER BY updated_at DESC').bind(c.id).all();return json({teams:(rows.results||[]).map(r=>({sharedTeamId:r.shared_team_id,name:r.name,players:JSON.parse(r.roster_json),revision:r.revision,updatedAt:r.updated_at}))});}

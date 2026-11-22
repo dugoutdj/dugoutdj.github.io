@@ -51,6 +51,11 @@ export async function onRequestPost({ request, env }) {
     const loginUrl = new URL(request.url);
     loginUrl.pathname = '/';
     loginUrl.search = `?login=${encodeURIComponent(rawToken)}`;
+    const isIOS = body?.platform === 'ios';
+    const iosUrl = `dugoutdj://login?token=${encodeURIComponent(rawToken)}`;
+    const html = isIOS
+      ? `<p>Sign in to Dugout DJ on your iPhone:</p><p><a href="${iosUrl}">Open in Dugout DJ iOS App</a></p><p>Or sign in on the web: <a href="${loginUrl.href}">${loginUrl.href}</a></p><p>If the button doesn’t open automatically, copy and paste this into the app:<br><code>${iosUrl}</code></p><p>This link expires in 15 minutes and can only be used once.</p>`
+      : `<p>Sign in to Dugout DJ:</p><p><a href="${loginUrl.href}">Sign in securely</a></p><p>This link expires in 15 minutes and can only be used once.</p>`;
     const resend = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -58,7 +63,7 @@ export async function onRequestPost({ request, env }) {
         from: 'Dugout DJ <coach@dugoutdj.com>',
         to: [email],
         subject: 'Your Dugout DJ sign-in link',
-        html: `<p>Sign in to Dugout DJ:</p><p><a href="${loginUrl.href}">Sign in securely</a></p><p>This link expires in 15 minutes and can only be used once.</p>`
+        html
       })
     });
     if (!resend.ok) {

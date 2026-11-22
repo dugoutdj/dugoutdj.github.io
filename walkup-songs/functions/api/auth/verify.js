@@ -38,7 +38,7 @@ export async function onRequestPost({ request, env }) {
     const sessionHash = await sha256(sessionRaw);
     const expiresAt = now + 30 * 24 * 60 * 60 * 1000;
     await env.DB.prepare('INSERT INTO sessions (token_hash,coach_id,expires_at,created_at) VALUES (?,?,?,?)').bind(sessionHash, id, expiresAt, now).run();
-    return json({ ok: true, email: token.email }, 200, {
+    return json({ ok: true, email: token.email, sessionToken: sessionRaw }, 200, {
       'Set-Cookie': `ddj_session=${sessionRaw}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
     });
   } catch (error) {
