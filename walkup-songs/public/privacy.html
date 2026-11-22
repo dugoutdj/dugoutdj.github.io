@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dugout DJ — Privacy Policy &amp; Support</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --border: #e2e8f0;
+        --accent: #16a34a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1120;
+          --card: #111827;
+          --text: #f1f5f9;
+          --muted: #94a3b8;
+          --border: #1e293b;
+          --accent: #22c55e;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        padding: 32px 16px;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 32px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 1.85rem;
+      }
+      .updated {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin: 0 0 24px;
+      }
+      h2 {
+        margin: 28px 0 8px;
+        font-size: 1.15rem;
+      }
+      p, ul {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+      ul {
+        padding-left: 20px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+      strong {
+        color: var(--text);
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Dugout DJ Privacy Policy &amp; Support</h1>
+      <p class="updated">Effective Date: November 22, 2026</p>
+
+      <p>
+        Dugout DJ helps baseball and softball coaches manage batting lineups, AI/voice batter
+        announcements, and walk-up song clips. You can use Dugout DJ locally on your device without
+        creating an account, or optionally sign in with your email address to sync rosters with
+        <strong>dugoutdj.com</strong>.
+      </p>
+
+      <h2>1. Information We Collect</h2>
+      <ul>
+        <li>
+          <strong>Email Address (Optional):</strong> If you choose to sign in as a coach, we collect
+          your email address to send a one-time sign-in link and associate your synced teams with
+          your account. Your session token is stored securely in the Apple Keychain on your device.
+        </li>
+        <li>
+          <strong>Team &amp; Roster Data:</strong> Team names, player first/last names, jersey
+          numbers, pronunciation hints, and walk-up song metadata (song title, start offset, and
+          duration) are stored on your device and synced to Dugout DJ servers only if you sign in or
+          generate a parent share link.
+        </li>
+      </ul>
+
+      <h2>2. On-Device Media &amp; Third-Party Playback</h2>
+      <ul>
+        <li>
+          <strong>Apple Music &amp; Local Audio Files:</strong> Songs selected from your Apple Music
+          library or imported via the iOS Files picker remain on your device and are never uploaded
+          by the iOS app.
+        </li>
+        <li>
+          <strong>Batter Announcements:</strong> When announcer mode is enabled, only the batter’s
+          name and jersey number are sent to <code>dugoutdj.com/api/announce</code> to generate and
+          cache the spoken introduction clip.
+        </li>
+        <li>
+          <strong>Embedded YouTube Videos:</strong> If a walk-up song uses a YouTube link, playback
+          is streamed directly through YouTube’s official embedded iframe player, which is subject to
+          YouTube and Google’s Terms of Service and Privacy Policy.
+        </li>
+      </ul>
+
+      <h2>3. Tracking &amp; Advertising</h2>
+      <p>
+        Dugout DJ does <strong>not</strong> use third-party advertising SDKs, behavioral tracking,
+        or cross-app tracking, and does not sell or rent user data.
+      </p>
+
+      <h2>4. Account &amp; Data Deletion</h2>
+      <p>
+        You can permanently delete your coach account and all cloud-synced team rosters directly
+        inside the iOS app at any time:
+      </p>
+      <ul>
+        <li>Open the upper-right <strong>⋯</strong> menu &rarr; <strong>Coach Account…</strong> &rarr; tap <strong>Delete Account…</strong>.</li>
+        <li>
+          This immediately removes your account record, active sessions, and synced teams from our
+          servers and clears local credentials from your device.
+        </li>
+      </ul>
+      <p>
+        You may also request account deletion or ask privacy questions by emailing
+        <a href="mailto:coach@dugoutdj.com">coach@dugoutdj.com</a>.
+      </p>
+
+      <h2>5. Support</h2>
+      <p>
+        Need help setting up your lineup, syncing parent selections, or troubleshooting playback?
+        Email <a href="mailto:coach@dugoutdj.com">coach@dugoutdj.com</a> or visit
+        <a href="https://dugoutdj.com">dugoutdj.com</a>.
+      </p>
+    </main>
+  </body>
+</html>
