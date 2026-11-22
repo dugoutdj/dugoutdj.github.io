@@ -1,20 +1,52 @@
 // YouTube API utility functions
 
-export const extractVideoId = (url) => {
-  if (!url) return null;
+const VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
 
-  // Handle various YouTube URL formats (including YouTube Music)
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|music\.youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
-  ];
+export const extractVideoId = (input) => {
+  if (!input || typeof input !== 'string') return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
 
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+  if (VIDEO_ID_RE.test(trimmed)) return trimmed;
+
+  // Support share-sheet text that includes surrounding text alongside a URL,
+  // as well as schemeless links like "music.youtube.com/watch?v=...".
+  const urlMatch = trimmed.match(/https?:\/\/\S+/i);
+  let candidate = urlMatch ? urlMatch[0].replace(/[.,!?;:)\]>]+$/, '') : trimmed;
+  if (!/^https?:\/\//i.test(candidate)) {
+    if (/^(?:(?:www\.|m\.|music\.)?(?:youtube\.com|youtube-nocookie\.com)|youtu\.be)\//i.test(candidate)) {
+      candidate = `https://${candidate}`;
+    } else {
+      return null;
+    }
   }
 
-  return null;
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  let videoId = null;
+
+  if (host === 'youtu.be' || host === 'www.youtu.be') {
+    videoId = parsed.pathname.split('/').filter(Boolean)[0] || null;
+  } else if (
+    host === 'youtube.com' ||
+    host.endsWith('.youtube.com') ||
+    host === 'youtube-nocookie.com' ||
+    host.endsWith('.youtube-nocookie.com')
+  ) {
+    videoId = parsed.searchParams.get('v');
+    if (!videoId) {
+      const pathMatch = parsed.pathname.match(/^\/(?:embed|shorts|live|v)\/([a-zA-Z0-9_-]{11})(?:[/?#]|$)/);
+      if (pathMatch) videoId = pathMatch[1];
+    }
+  }
+
+  return videoId && VIDEO_ID_RE.test(videoId) ? videoId : null;
 };
 
 export const formatTime = (seconds) => {
@@ -42,6 +74,12 @@ export const fetchVideoInfo = async (videoId) => {
       `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
     );
 
+    if (response.status === 401 || response.status === 403) {
+      return { error: 'embed_disabled' };
+    }
+    if (response.status === 404) {
+      return { error: 'not_found' };
+    }
     if (!response.ok) {
       throw new Error('Failed to fetch video info');
     }

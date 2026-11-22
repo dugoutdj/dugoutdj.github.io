@@ -226,17 +226,27 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
   // thumbnail, and store it as the player's song. Parents/coaches pick the
   // exact walk-up window with the start/length inputs below the preview.
   const handleLoadYouTube = async () => {
-    const videoId = extractVideoId(youtubeUrl.trim());
+    const rawInput = youtubeUrl.trim();
+    const videoId = extractVideoId(rawInput);
     if (!videoId) {
-      setYoutubeError("That doesn't look like a valid YouTube link.");
+      const isCollection = /youtube\.com\/(?:playlist|browse\/)/i.test(rawInput);
+      setYoutubeError(
+        isCollection
+          ? 'Please paste a link to a specific song, not a playlist or album.'
+          : "That doesn't look like a valid YouTube or YouTube Music link."
+      );
       return;
     }
     setYoutubeLoading(true);
     setYoutubeError(null);
     try {
       const info = await fetchVideoInfo(videoId);
-      if (!info) {
-        setYoutubeError("Couldn't load that video \u2014 check the link and try again.");
+      if (info?.error === 'embed_disabled') {
+        setYoutubeError("This track doesn't allow embedding in other apps — try a different YouTube version of the song or upload an MP3.");
+        return;
+      }
+      if (!info || info.error) {
+        setYoutubeError("Couldn't load that song — check the link and try again.");
         return;
       }
       setFormData((prev) => ({
@@ -265,7 +275,7 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
       });
       getYtPreviewPlayer().catch(() => {});
     } catch {
-      setYoutubeError("Couldn't load that video \u2014 check the link and try again.");
+      setYoutubeError("Couldn't load that song — check the link and try again.");
     } finally {
       setYoutubeLoading(false);
     }
@@ -417,7 +427,17 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
                 ytPreviewPlayerRef.current = player;
                 resolve(player);
               },
-              onError: () => resolve(null)
+              onError: (event) => {
+                if (event?.data === 101 || event?.data === 150) {
+                  if (ytPreviewTimerRef.current) {
+                    clearInterval(ytPreviewTimerRef.current);
+                    ytPreviewTimerRef.current = null;
+                  }
+                  setYoutubeError("This track doesn't allow embedding in other apps — try a different YouTube version or upload an MP3.");
+                  setPreviewing(false);
+                }
+                resolve(null);
+              }
             }
           });
         } catch {
@@ -710,14 +730,14 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
           <label>Song</label>
           <div className="song-source-box">
           <div className="form-group youtube-url-group">
-            <label>Paste a YouTube link</label>
+            <label>Paste a YouTube or YouTube Music link</label>
             <div className="youtube-url-row">
               <input
                 type="text"
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
                 className="input"
-                placeholder="https://www.youtube.com/watch?v=..."
+                placeholder="https://www.youtube.com/watch?v=... or https://music.youtube.com/watch?v=..."
                 disabled={youtubeLoading}
               />
               <button
@@ -731,8 +751,8 @@ export default function PlayerForm({ player, onSave, onCancel, songOnly = false,
             </div>
             {youtubeError && <small className="search-error-text">{youtubeError}</small>}
             <small className="form-hint">
-              Pick the exact part of any full song on YouTube — paste the link, then set the
-              start and length below.
+              Pick the exact part of any full song on YouTube or YouTube Music — paste the link,
+              then set the start and length below.
             </small>
           </div>
 
