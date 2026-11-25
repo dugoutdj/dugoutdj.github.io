@@ -1,0 +1,56 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "B6D7E290-3A2C-4E19-9D4A-8A7E9120D501",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "A1B2C3D4",
+      "localizations" : [],
+      "name" : "Dugout DJ Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "E5F60718",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlocks AI Stadium Announcer, Top 300 Walk-Up Song Presets, and Unlimited Teams.",
+              "displayName" : "Dugout DJ Pro — Season Pass",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.dugoutdj.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Dugout DJ Pro Yearly",
+          "subscriptionGroupID" : "A1B2C3D4",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
