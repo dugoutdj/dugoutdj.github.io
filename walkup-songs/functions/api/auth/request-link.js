@@ -64,9 +64,13 @@ export async function onRequestPost({ request, env }) {
     loginUrl.pathname = '/';
     loginUrl.search = `?login=${encodeURIComponent(rawToken)}`;
     const isIOS = body?.platform === 'ios';
-    const iosUrl = `dugoutdj://login?token=${encodeURIComponent(rawToken)}`;
-    const html = isIOS
-      ? `<p>Sign in to Dugout DJ on your iPhone:</p><p><a href="${iosUrl}">Open in Dugout DJ iOS App</a></p><p>Or sign in on the web: <a href="${loginUrl.href}">${loginUrl.href}</a></p><p>If the button doesn’t open automatically, copy and paste this into the app:<br><code>${iosUrl}</code></p><p>This link expires in 15 minutes and can only be used once.</p>`
+    const isAndroid = body?.platform === 'android';
+    const isMobile = isIOS || isAndroid;
+    const appUrl = `dugoutdj://login?token=${encodeURIComponent(rawToken)}`;
+    const deviceLabel = isAndroid ? 'your Android device' : 'your iPhone';
+    const appLabel = isAndroid ? 'Dugout DJ Android App' : 'Dugout DJ iOS App';
+    const html = isMobile
+      ? `<p>Sign in to Dugout DJ on ${deviceLabel}:</p><p><a href="${appUrl}">Open in ${appLabel}</a></p><p>Or sign in on the web: <a href="${loginUrl.href}">${loginUrl.href}</a></p><p>If the button doesn’t open automatically, copy and paste this into the app:<br><code>${appUrl}</code></p><p>This link expires in 15 minutes and can only be used once.</p>`
       : `<p>Sign in to Dugout DJ:</p><p><a href="${loginUrl.href}">Sign in securely</a></p><p>This link expires in 15 minutes and can only be used once.</p>`;
     const resend = await fetch('https://api.resend.com/emails', {
       method: 'POST',
